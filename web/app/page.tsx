@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { client, ADDRESSES, explorer, guardianAbi, vaultAbi } from "./lib/somnia";
+import DemoConsole from "./components/DemoConsole";
 
 type State = {
   paused: boolean;
@@ -104,6 +105,8 @@ export default function Home() {
         </p>
       )}
       {at && <p className="refresh">Live from Somnia testnet · last update {at} · auto-refresh 12s</p>}
+
+      <DemoConsole />
 
       <div className="section-title">How it defends — three tiers</div>
       <div className="tiers">
