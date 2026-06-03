@@ -95,7 +95,7 @@ export default function Home() {
         </div>
         <div className="card">
           <div className="label">AI agent id</div>
-          <div className="value">{s ? (s.agentId === 0n ? "unset" : s.agentId.toString()) : "—"}</div>
+          <div className="value">{s ? (s.agentId === BigInt(0) ? "unset" : s.agentId.toString()) : "—"}</div>
         </div>
       </div>
       {err && (
