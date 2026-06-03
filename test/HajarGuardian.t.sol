@@ -162,5 +162,42 @@ contract HajarGuardianTest is Test {
         guardian.onReactiveSignal(attacker, 50 ether, 100 ether);
     }
 
+    /// P1 #4: an underfunded guardian must NOT block grey-zone withdrawals (fail open).
+    function test_Underfunded_GreyZone_DoesNotBlock() public {
+        guardian.withdrawFunds(address(guardian).balance); // drain guardian STT
+        vm.prank(alice);
+        vault.withdraw(20 ether); // grey zone -> escalation skipped, withdrawal still succeeds
+        assertEq(alice.balance, 20 ether, "withdrawal must succeed even if AI can't be paid");
+    }
+
+    /// P1 #5: a user cannot trigger repeated paid escalations within the cooldown window.
+    function test_EscalationCooldown_PreventsDrainingBudget() public {
+        uint256 balBefore = address(guardian).balance;
+        vm.prank(alice);
+        vault.withdraw(16 ether); // grey zone -> one escalation (pays)
+        uint256 afterFirst = address(guardian).balance;
+        assertLt(afterFirst, balBefore, "first escalation should spend STT");
+
+        vm.prank(alice);
+        vault.withdraw(16 ether); // within cooldown -> skipped, no spend
+        assertEq(address(guardian).balance, afterFirst, "second escalation must be on cooldown");
+    }
+
+    /// P1 #6: the same withdrawal must not be counted twice across sync + reactive paths.
+    function test_Velocity_NoDoubleCount_AcrossReactive() public {
+        HajarReactiveMonitor monitor = new HajarReactiveMonitor(address(guardian));
+        guardian.setReactiveMonitor(address(monitor));
+
+        // single 30% withdrawal: recorded once by checkWithdrawal
+        vm.prank(alice);
+        vault.withdraw(30 ether); // 30% of 100, below 60% rapid limit -> allowed
+        assertEq(alice.balance, 30 ether);
+
+        // reactivity fires for that SAME withdrawal (tvlBefore = 100, as the event carries),
+        // read-only velocity is still 30%, below both limits, so it must NOT latch.
+        monitor.onWithdrawn(alice, 30 ether, 100 ether);
+        assertFalse(guardian.paused(), "reactive path must not double-count into a false trip");
+    }
+
     receive() external payable {}
 }

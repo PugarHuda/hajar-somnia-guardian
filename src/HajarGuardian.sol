@@ -58,6 +58,10 @@ contract HajarGuardian {
 
     mapping(address => Window) public windows;
 
+    // anti-griefing: rate-limit how often a user can trigger a (paid) AI escalation
+    uint256 public escalationCooldown = 60; // seconds between escalations per user
+    mapping(address => uint256) public lastEscalation;
+
     // request bookkeeping for the async callback
     struct PendingContext {
         address user;
@@ -74,9 +78,11 @@ contract HajarGuardian {
 
     event HardBlock(address indexed user, uint256 amount, uint256 bps);
     event EscalatedToAI(uint256 indexed requestId, address indexed user, uint256 amount);
+    event EscalationSkipped(address indexed user, string reason);
     event AIVerdict(uint256 indexed requestId, uint256 riskScore, uint256 validatorCount, bool tripped);
     event CircuitBreakerTripped(string reason);
     event CircuitBreakerReset();
+    event OwnershipTransferred(address indexed from, address indexed to);
 
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
@@ -87,7 +93,7 @@ contract HajarGuardian {
     error NotPlatform();
     error NotMonitor();
     error UnknownRequest();
-    error InsufficientFunding();
+    error ZeroAddress();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -115,10 +121,12 @@ contract HajarGuardian {
         if (tvlBefore == 0) return true;
 
         uint256 bps = (amount * 10_000) / tvlBefore;
-        // velocity: cumulative share this user has pulled within the rolling window.
+        // velocity: record this withdrawal, then read cumulative share within the window.
         // Only successful (non-reverted) withdrawals persist here, so blocked attempts
-        // never inflate the counter.
-        uint256 windowBps = _recordAndGetWindowBps(user, amount, tvlBefore);
+        // never inflate the counter. Recording happens ONLY on this synchronous path so a
+        // later reactivity event for the same withdrawal cannot double-count it.
+        _record(user, amount);
+        uint256 windowBps = _windowBps(user, tvlBefore);
 
         // --- Tier 1: deterministic hard rule (instant, same-block) ---
         // We block the offending withdrawal by returning false (the vault reverts).
@@ -164,30 +172,49 @@ contract HajarGuardian {
         return false;
     }
 
-    /// @dev Updates and returns the user's cumulative withdrawal share within the window.
-    function _recordAndGetWindowBps(address user, uint256 amount, uint256 tvlBefore)
-        internal
-        returns (uint256)
-    {
+    /// @dev Records a withdrawal into the user's rolling velocity window (resets if expired).
+    function _record(address user, uint256 amount) internal {
         Window storage w = windows[user];
         if (block.timestamp > uint256(w.start) + windowSeconds) {
             w.start = uint64(block.timestamp);
             w.cumAmount = 0;
         }
+        // amounts are bounded by vault TVL; uint192 cannot realistically overflow here.
         w.cumAmount += uint192(amount);
-        return (uint256(w.cumAmount) * 10_000) / tvlBefore;
+    }
+
+    /// @dev Read-only: the user's cumulative withdrawal share of TVL within the window.
+    ///      Returns 0 if the window has expired (mirrors the reset in `_record`).
+    function _windowBps(address user, uint256 tvl) internal view returns (uint256) {
+        Window storage w = windows[user];
+        if (tvl == 0 || block.timestamp > uint256(w.start) + windowSeconds) return 0;
+        return (uint256(w.cumAmount) * 10_000) / tvl;
     }
 
     /*//////////////////////////////////////////////////////////////
                           TIER 2 — ASYNC (AI)
     //////////////////////////////////////////////////////////////*/
 
+    /// @dev Best-effort escalation. MUST NOT revert: it runs inside the user's withdrawal,
+    ///      so any revert here would block a legitimate withdrawal (availability DoS). If we
+    ///      can't escalate (underfunded or on cooldown) we skip and let Tier-3/owner cover it.
     function _escalateToAI(address user, uint256 amount, uint256 tvl) internal {
+        // anti-griefing: one paid escalation per user per cooldown window.
+        // (lastEscalation == 0 means "never escalated" — always allow the first one.)
+        if (lastEscalation[user] != 0 && block.timestamp < lastEscalation[user] + escalationCooldown) {
+            emit EscalationSkipped(user, "cooldown");
+            return;
+        }
+
         uint256 reserve = platform.getRequestDeposit();
         uint256 reward = costPerValidator * subcommitteeSize;
         uint256 needed = reserve + reward;
-        if (address(this).balance < needed) revert InsufficientFunding();
+        if (address(this).balance < needed) {
+            emit EscalationSkipped(user, "underfunded");
+            return; // fail open — never block the withdrawal
+        }
 
+        lastEscalation[user] = block.timestamp;
         string memory prompt = _buildPrompt(user, amount, tvl);
         bytes memory payload = abi.encodeWithSelector(
             ILLMInferenceAgent.inferNumber.selector,
@@ -229,7 +256,9 @@ contract HajarGuardian {
         uint256 sum;
         uint256 n;
         for (uint256 i = 0; i < responses.length; i++) {
-            if (responses[i].status == ResponseStatus.Success && responses[i].result.length > 0) {
+            // require exactly 32 bytes so a malformed validator result can't revert the
+            // whole callback (which would otherwise strand the request).
+            if (responses[i].status == ResponseStatus.Success && responses[i].result.length == 32) {
                 sum += abi.decode(responses[i].result, (uint256));
                 n++;
             }
@@ -280,8 +309,10 @@ contract HajarGuardian {
         if (msg.sender != reactiveMonitor) revert NotMonitor();
         if (tvlBefore == 0) return;
 
+        // Read-only velocity: the withdrawal was already recorded by the synchronous
+        // checkWithdrawal path, so we must NOT record again here (avoids double-counting).
         uint256 bps = (amount * 10_000) / tvlBefore;
-        uint256 windowBps = _recordAndGetWindowBps(user, amount, tvlBefore);
+        uint256 windowBps = _windowBps(user, tvlBefore);
 
         if (_isHardViolation(user, amount, tvlBefore, bps, windowBps)) {
             paused = true;
@@ -313,6 +344,18 @@ contract HajarGuardian {
 
     function setWindow(uint256 secondsWindow) external onlyOwner {
         windowSeconds = secondsWindow;
+    }
+
+    function setEscalationCooldown(uint256 secondsCooldown) external onlyOwner {
+        escalationCooldown = secondsCooldown;
+    }
+
+    /// @notice Transfer ownership. Roadmap: replace with a multisig/timelock so a single key
+    ///         can't unilaterally pause the protocol or move guardian funds.
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 
     function setLlmAgentId(uint256 id) external onlyOwner {
