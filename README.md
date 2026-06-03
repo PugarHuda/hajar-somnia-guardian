@@ -67,11 +67,32 @@ platform ABI** before broadcasting. Search for `TODO(verify)` in `src/`.
 `HajarGuardian._isHardViolation()` is the policy brain — tune it to the protocol you
 protect. Too strict → false pauses; too loose → an exploit drains funds before Tier-2 reacts.
 
+## Deployments — Somnia Shannon Testnet (chain 50312)
+
+| Contract | Address | Explorer |
+|----------|---------|----------|
+| HajarGuardian | `0xa5F1d1781bB50B41434E2f507667e22De3Df27a9` | [view](https://shannon-explorer.somnia.network/address/0xa5F1d1781bB50B41434E2f507667e22De3Df27a9) |
+| ProtectedVault | `0x7e02327D9e6097DA2a30C588A9BA62C923ad8AD6` | [view](https://shannon-explorer.somnia.network/address/0x7e02327D9e6097DA2a30C588A9BA62C923ad8AD6) |
+| HajarReactiveMonitor | `0x40C37188A192866459A50A6D68b6160De9812bFc` | [view](https://shannon-explorer.somnia.network/address/0x40C37188A192866459A50A6D68b6160De9812bFc) |
+| Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
+
+**Verified live on testnet:** hard-block reverts an 80%-of-TVL withdrawal; a reactivity
+signal latches the circuit breaker (`paused = true`). `LLM_AGENT_ID` is `0` until set via
+`setLlmAgentId` (Tier-1/Tier-3 work without it).
+
+### ⚠️ Somnia deploy gotchas (learned the hard way)
+- **Use legacy txs** (`--legacy`). EIP-1559 deploys fail on Somnia.
+- **Gas is metered ~10x higher than mainnet-EVM intuition.** `HajarGuardian` costs **~24M
+  gas** to deploy (block limit is 333M). `forge script` under-estimates and the CREATE
+  fails *silently* (prints an address with no code). Deploy with **`forge create
+  --gas-limit 35000000`** (or `cast send --gas-limit`), not `forge script`.
+
 ## Status
 
-- [x] Two-tier guardian + demo vault
+- [x] Three-tier guardian (sync hard rule + velocity, async AI, reactivity latch)
+- [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] Local async AI flow via mock platform
-- [x] 7 passing tests
-- [ ] Reconcile interface with live Somnia ABI
-- [ ] Deploy to testnet + record demo
-- [ ] (stretch) Reactivity subscription for latch-on-detection
+- [x] 10 passing tests
+- [x] Deployed + live-verified on Somnia testnet
+- [ ] Reconcile `ISomniaAgents` with live ABI; set real `LLM_AGENT_ID`
+- [ ] Frontend dashboard + demo video

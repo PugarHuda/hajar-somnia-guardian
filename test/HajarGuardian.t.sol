@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {HajarGuardian} from "../src/HajarGuardian.sol";
 import {ProtectedVault} from "../src/ProtectedVault.sol";
 import {MockAgentPlatform} from "../src/mocks/MockAgentPlatform.sol";
+import {HajarReactiveMonitor} from "../src/HajarReactiveMonitor.sol";
+import {Exploiter} from "../src/demo/Exploiter.sol";
 import {Response, Request, ResponseStatus} from "../src/interfaces/ISomniaAgents.sol";
 
 contract HajarGuardianTest is Test {
@@ -121,6 +123,43 @@ contract HajarGuardianTest is Test {
         vm.prank(attacker);
         vm.expectRevert(HajarGuardian.NotPlatform.selector);
         guardian.handleResponse(1, empty, ResponseStatus.Success, req);
+    }
+
+    /// Velocity: looped medium withdrawals (each below the single-tx limit) are caught by
+    /// the rapid-drain rule once cumulative share crosses rapidDrainBps.
+    function test_Velocity_RapidDrain_Blocked() public {
+        Exploiter exploiter = new Exploiter(address(vault));
+        vm.deal(address(this), 100 ether);
+        exploiter.fundPosition{value: 100 ether}(); // TVL now 200, exploiter owns 100
+
+        // chunks of 30 (15% of 200, below 40% hard limit) repeated; cumulative trips 60%.
+        uint256 succeeded = exploiter.attack(30 ether, 5);
+
+        assertEq(succeeded, 2, "should be blocked on the 3rd looped withdrawal");
+        assertGt(vault.balanceOf(address(exploiter)), 0, "attacker could not fully drain");
+    }
+
+    /// Tier 3: a reactivity-driven signal latches the breaker in a SEPARATE execution
+    /// (no revert), then subsequent withdrawals are paused.
+    function test_Tier3_Reactivity_LatchesBreaker() public {
+        HajarReactiveMonitor monitor = new HajarReactiveMonitor(address(guardian));
+        guardian.setReactiveMonitor(address(monitor));
+        // monitor.subscription defaults to this test (the demo keeper)
+
+        // simulate the subscription firing on a drain-sized Withdrawn event
+        monitor.onWithdrawn(attacker, 50 ether, 100 ether); // 50% -> hard violation
+        assertTrue(guardian.paused(), "reactivity should latch the breaker");
+
+        vm.prank(alice);
+        vm.expectRevert(ProtectedVault.ProtocolPaused.selector);
+        vault.withdraw(1 ether);
+    }
+
+    /// Tier 3 access control: only the configured monitor may signal.
+    function test_onReactiveSignal_OnlyMonitor() public {
+        vm.prank(attacker);
+        vm.expectRevert(HajarGuardian.NotMonitor.selector);
+        guardian.onReactiveSignal(attacker, 50 ether, 100 ether);
     }
 
     receive() external payable {}

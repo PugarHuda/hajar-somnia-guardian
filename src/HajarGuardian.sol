@@ -40,12 +40,23 @@ contract HajarGuardian {
     uint256 public costPerValidator = 0.07 ether; // STT per validator for LLM inference
 
     // --- tunable policy knobs (basis points of TVL; 10_000 = 100%) ---
-    uint256 public hardWithdrawalBps = 4_000; // >=40% of TVL in one tx => instant block
+    uint256 public hardWithdrawalBps = 4_000; // >=40% of TVL in ONE tx => instant block
+    uint256 public rapidDrainBps = 6_000; // >=60% by one user within window => instant block
     uint256 public greyZoneBps = 1_500; // >=15% => allow but escalate to AI
     uint256 public riskThreshold = 70; // AI score (0..100) at/above which we pause
+    uint256 public windowSeconds = 300; // velocity window for rapid-drain detection
 
     bool public paused;
     mapping(address => bool) public whitelisted; // trusted addresses skip checks
+    address public reactiveMonitor; // authorized Somnia Reactivity handler (Tier 3)
+
+    // rolling-window velocity tracking per user
+    struct Window {
+        uint64 start;
+        uint192 cumAmount;
+    }
+
+    mapping(address => Window) public windows;
 
     // request bookkeeping for the async callback
     struct PendingContext {
@@ -74,6 +85,7 @@ contract HajarGuardian {
     error NotOwner();
     error NotVault();
     error NotPlatform();
+    error NotMonitor();
     error UnknownRequest();
     error InsufficientFunding();
 
@@ -103,40 +115,67 @@ contract HajarGuardian {
         if (tvlBefore == 0) return true;
 
         uint256 bps = (amount * 10_000) / tvlBefore;
+        // velocity: cumulative share this user has pulled within the rolling window.
+        // Only successful (non-reverted) withdrawals persist here, so blocked attempts
+        // never inflate the counter.
+        uint256 windowBps = _recordAndGetWindowBps(user, amount, tvlBefore);
 
         // --- Tier 1: deterministic hard rule (instant, same-block) ---
         // We block the offending withdrawal by returning false (the vault reverts).
         // We deliberately do NOT latch `paused` here: reverting the trigger tx would
         // roll the latch back anyway, and the deterministic rule re-blocks every retry,
         // so per-tx blocking already protects the funds. The global breaker is latched
-        // only via Tier 2 (async AI callback) or a reactivity monitor — paths that run
-        // in a separate execution and therefore survive.
-        if (_isHardViolation(user, amount, tvlBefore, bps)) {
+        // only via Tier 2 (async AI callback) or Tier 3 (reactivity monitor) — paths
+        // that run in a separate execution and therefore survive.
+        if (_isHardViolation(user, amount, tvlBefore, bps, windowBps)) {
             emit HardBlock(user, amount, bps);
             return false;
         }
 
         // --- Tier 2: grey zone => allow now, ask AI to judge (async) ---
-        if (bps >= greyZoneBps) {
+        if (bps >= greyZoneBps || windowBps >= greyZoneBps) {
             _escalateToAI(user, amount, tvlBefore);
         }
 
         return true;
     }
 
-    /// @notice THE policy brain. Returns true if `amount` is a blatant attack that
+    /// @notice THE policy brain. Returns true if this withdrawal is a blatant attack that
     ///         must be stopped immediately, no AI needed.
     /// @dev    This is the single most important design decision in Hajar — tune it to
     ///         the protocol you protect. Too strict => false pauses (protocol unusable);
     ///         too loose => an exploit drains funds before Tier 2's AI can react.
-    ///         Default: block any single withdrawal taking >= hardWithdrawalBps of TVL.
+    ///
+    ///         Lending/vault-aware defaults, two deterministic signals:
+    ///           1. Single-tx drain: one withdrawal taking >= hardWithdrawalBps of TVL.
+    ///           2. Rapid drain (velocity): one user pulling >= rapidDrainBps of TVL
+    ///              within `windowSeconds` — the classic loop/re-entry exploit shape.
+    /// @param bps        this withdrawal's share of TVL, in basis points.
+    /// @param windowBps  this user's cumulative share within the rolling window.
     function _isHardViolation(
         address, /* user */
         uint256, /* amount */
         uint256, /* tvlBefore */
-        uint256 bps
+        uint256 bps,
+        uint256 windowBps
     ) internal view returns (bool) {
-        return bps >= hardWithdrawalBps;
+        if (bps >= hardWithdrawalBps) return true; // signal 1: single-tx drain
+        if (windowBps >= rapidDrainBps) return true; // signal 2: rapid/looped drain
+        return false;
+    }
+
+    /// @dev Updates and returns the user's cumulative withdrawal share within the window.
+    function _recordAndGetWindowBps(address user, uint256 amount, uint256 tvlBefore)
+        internal
+        returns (uint256)
+    {
+        Window storage w = windows[user];
+        if (block.timestamp > uint256(w.start) + windowSeconds) {
+            w.start = uint64(block.timestamp);
+            w.cumAmount = 0;
+        }
+        w.cumAmount += uint192(amount);
+        return (uint256(w.cumAmount) * 10_000) / tvlBefore;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -227,6 +266,30 @@ contract HajarGuardian {
     }
 
     /*//////////////////////////////////////////////////////////////
+                       TIER 3 — REACTIVITY (event-driven)
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Latch-on-detection path, meant to be driven by a Somnia Reactivity
+    ///         subscription that fires on the vault's `Withdrawn` event. Because this runs
+    ///         in a SEPARATE (validator-triggered) execution — not inside the withdrawal tx —
+    ///         it CAN persistently latch the breaker, which Tier 1 cannot.
+    /// @dev    In production you register a subscription whose handler calls this. Here it is
+    ///         guarded to `reactiveMonitor` so it can also be driven by an off-chain keeper
+    ///         during the demo. Same deterministic rule as Tier 1, but it pauses globally.
+    function onReactiveSignal(address user, uint256 amount, uint256 tvlBefore) external {
+        if (msg.sender != reactiveMonitor) revert NotMonitor();
+        if (tvlBefore == 0) return;
+
+        uint256 bps = (amount * 10_000) / tvlBefore;
+        uint256 windowBps = _recordAndGetWindowBps(user, amount, tvlBefore);
+
+        if (_isHardViolation(user, amount, tvlBefore, bps, windowBps)) {
+            paused = true;
+            emit CircuitBreakerTripped("tier3-reactivity");
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                 ADMIN
     //////////////////////////////////////////////////////////////*/
 
@@ -234,10 +297,22 @@ contract HajarGuardian {
         vault = v;
     }
 
-    function setThresholds(uint256 hardBps, uint256 greyBps, uint256 risk) external onlyOwner {
+    function setReactiveMonitor(address m) external onlyOwner {
+        reactiveMonitor = m;
+    }
+
+    function setThresholds(uint256 hardBps, uint256 rapidBps, uint256 greyBps, uint256 risk)
+        external
+        onlyOwner
+    {
         hardWithdrawalBps = hardBps;
+        rapidDrainBps = rapidBps;
         greyZoneBps = greyBps;
         riskThreshold = risk;
+    }
+
+    function setWindow(uint256 secondsWindow) external onlyOwner {
+        windowSeconds = secondsWindow;
     }
 
     function setLlmAgentId(uint256 id) external onlyOwner {

@@ -10,3 +10,6 @@ broadcast/
 
 # Misc
 *.log
+
+# local deploy notes
+deployed.txt
