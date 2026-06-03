@@ -80,6 +80,13 @@ protect. Too strict → false pauses; too loose → an exploit drains funds befo
 signal latches the circuit breaker (`paused = true`). `LLM_AGENT_ID` is `0` until set via
 `setLlmAgentId` (Tier-1/Tier-3 work without it).
 
+**Somnia Agents — reconciled to the live ABI:**
+- **LLM Inference agent id:** `12847293847561029384` (Qwen3-30B, same id testnet & mainnet).
+- Live `inferNumber(string prompt, string system, int256 min, int256 max, bool chainOfThought)
+  → int256`; 15-field `Request` struct; `ConsensusType { Majority, Threshold }`. Hajar's
+  `ISomniaAgents.sol` now matches exactly (the earlier `TODO(verify)` is closed).
+- Tier-2 escalates with consensus subcommittee = 3, ~0.07 STT/validator (~0.24 STT/call).
+
 ### ⚠️ Somnia deploy gotchas (learned the hard way)
 - **Use legacy txs** (`--legacy`). EIP-1559 deploys fail on Somnia.
 - **Gas is metered ~10x higher than mainnet-EVM intuition.** `HajarGuardian` costs **~24M
@@ -90,9 +97,14 @@ signal latches the circuit breaker (`paused = true`). `LLM_AGENT_ID` is `0` unti
 ## Status
 
 - [x] Three-tier guardian (sync hard rule + velocity, async AI, reactivity latch)
+- [x] Proactive autonomous monitoring (`requestRiskCheck`) for 24/7 AI health checks
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] Local async AI flow via mock platform
-- [x] 10 passing tests
-- [x] Deployed + live-verified on Somnia testnet
-- [ ] Reconcile `ISomniaAgents` with live ABI; set real `LLM_AGENT_ID`
-- [ ] Frontend dashboard + demo video
+- [x] `ISomniaAgents` reconciled to the live ABI; real `LLM_AGENT_ID` wired
+- [x] 15 passing tests
+- [x] Tier-1/Tier-3 deployed + live-verified on Somnia testnet
+- [x] Frontend dashboard live on Vercel
+- [ ] Redeploy reconciled guardian + live Tier-2 AI inference demo (needs testnet STT)
+- [ ] (roadmap) `inferToolsChat` agent that emits remediation calldata — pending the
+      onchainTools tuple ABI so the selector can be computed correctly
+- [ ] Demo video

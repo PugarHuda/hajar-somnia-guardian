@@ -3,10 +3,11 @@ pragma solidity ^0.8.24;
 
 /*//////////////////////////////////////////////////////////////
                     SOMNIA AGENTS INTERFACE
+   Reconciled against the LIVE platform ABI (agents.somnia.network).
 //////////////////////////////////////////////////////////////*/
 
-/// @dev Status of an individual validator response.
-///      Numbers are fixed per Somnia docs: None=0, Pending=1, Success=2, Failed=3, TimedOut=4.
+/// @dev Status of a request / individual validator response.
+///      None=0, Pending=1, Success=2, Failed=3, TimedOut=4.
 enum ResponseStatus {
     None,
     Pending,
@@ -15,10 +16,9 @@ enum ResponseStatus {
     TimedOut
 }
 
-/// @dev Consensus strategy for advanced requests.
+/// @dev Consensus strategy. NOTE: the live platform exposes exactly { Majority, Threshold }.
 enum ConsensusType {
     Majority,
-    Unanimous,
     Threshold
 }
 
@@ -32,28 +32,32 @@ struct Response {
     uint256 executionCost;
 }
 
-/// @dev Metadata about the original request, echoed back in the callback.
-/// @notice TODO(verify): reconcile this struct with the official Somnia ISomniaAgents
-///         ABI before deploying to testnet/mainnet. Decoding the callback depends on it.
+/// @dev Full request metadata echoed back in the callback. MUST match the live ABI exactly
+///      or the callback fails to decode.
 struct Request {
-    uint256 agentId;
+    uint256 id;
     address requester;
     address callbackAddress;
     bytes4 callbackSelector;
-    uint256 deposit;
+    address[] subcommittee;
+    Response[] responses;
+    uint256 responseCount;
+    uint256 failureCount;
+    uint256 threshold;
+    uint256 createdAt;
+    uint256 deadline;
+    ResponseStatus status;
+    ConsensusType consensusType;
+    uint256 remainingBudget;
+    uint256 perAgentBudget;
 }
 
 /// @notice The Somnia Agents platform contract.
-/// @dev Platform addresses (from docs):
+/// @dev Platform addresses:
 ///        Mainnet (chainId 5031):  0x5E5205CF39E766118C01636bED000A54D93163E6
 ///        Testnet (chainId 50312): 0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776
-interface ISomniaAgents {
-    /// @notice Create a request to an agent with default subcommittee settings.
-    /// @param agentId          Agent id from https://agents.somnia.network
-    /// @param callbackAddress  Contract that receives the response (usually address(this)).
-    /// @param callbackSelector Selector of the callback fn (e.g. this.handleResponse.selector).
-    /// @param payload          abi.encodeWithSelector(IAgentFn.method.selector, args...)
-    /// @return requestId       Tracking id; the response arrives later via the callback.
+///      AgentRegistry (browse): 0xaD3101C37F091593fEe7cb471e92b5E9A1205194
+interface IAgentRequester {
     function createRequest(
         uint256 agentId,
         address callbackAddress,
@@ -61,25 +65,13 @@ interface ISomniaAgents {
         bytes calldata payload
     ) external payable returns (uint256 requestId);
 
-    /// @notice Create a request with explicit consensus controls.
-    function createAdvancedRequest(
-        uint256 agentId,
-        address callbackAddress,
-        bytes4 callbackSelector,
-        bytes calldata payload,
-        uint256 subcommitteeSize,
-        uint256 threshold,
-        ConsensusType consensusType,
-        uint256 timeout
-    ) external payable returns (uint256 requestId);
-
-    /// @notice Reserve portion of the deposit (covers gas refunds/operations).
-    /// @dev Total to send = getRequestDeposit() + (pricePerAgent * subcommitteeSize).
+    /// @notice Reserve portion of the deposit. Total to send =
+    ///         getRequestDeposit() + (perAgentExecutionCost * subcommitteeSize).
     function getRequestDeposit() external view returns (uint256);
 }
 
 /// @notice The callback your contract MUST implement to receive agent results.
-interface IAgentCallback {
+interface IAgentRequesterHandler {
     function handleResponse(
         uint256 requestId,
         Response[] calldata responses,
@@ -89,23 +81,34 @@ interface IAgentCallback {
 }
 
 /*//////////////////////////////////////////////////////////////
-                    BASE AGENT PAYLOAD INTERFACES
-    Used only for abi.encodeWithSelector(...) to build payloads.
-    These are never *called* directly on-chain.
+        BASE AGENT PAYLOAD INTERFACES (live signatures)
+   Used only for abi.encodeWithSelector(...) to build payloads.
 //////////////////////////////////////////////////////////////*/
 
-/// @notice LLM Inference Agent (Qwen3-30B, deterministic). Cost ~0.07 STT / validator.
-/// @dev TODO(verify): confirm exact selectors/signatures against the live agent ABI.
+/// @notice LLM Inference Agent (Qwen3-30B, deterministic). agentId 12847293847561029384.
+///         ~0.07 STT / validator.
 interface ILLMInferenceAgent {
-    /// @notice Single integer output, clamped to [min, max]. Ideal for risk scores.
-    function inferNumber(string calldata prompt, uint256 min, uint256 max) external returns (uint256);
+    /// @notice Single signed-integer output, clamped to [minValue, maxValue]. Ideal for risk scores.
+    function inferNumber(
+        string calldata prompt,
+        string calldata system,
+        int256 minValue,
+        int256 maxValue,
+        bool chainOfThought
+    ) external returns (int256 response);
 
-    /// @notice Single-turn classification constrained to one of `allowed` values.
-    function inferString(string calldata prompt, string[] calldata allowed) external returns (string memory);
+    /// @notice Single-turn classification constrained to one of `allowedValues`.
+    function inferString(
+        string calldata prompt,
+        string calldata system,
+        bool chainOfThought,
+        string[] calldata allowedValues
+    ) external returns (string memory response);
 }
 
-/// @notice JSON API Request Agent. Cost ~0.03 STT / validator.
+/// @notice JSON API Request Agent. agentId 13174292974160097713. ~0.03 STT / validator.
 interface IJsonApiAgent {
-    /// @notice Fetch a public JSON endpoint and extract a uint via a json-path selector.
-    function fetchUint(string calldata url, string calldata selector, uint8 decimals) external returns (uint256);
+    function fetchUint(string calldata url, string calldata selector, uint8 decimals)
+        external
+        returns (uint256);
 }

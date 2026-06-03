@@ -2,12 +2,16 @@
 pragma solidity ^0.8.24;
 
 import {
-    ISomniaAgents,
+    IAgentRequester,
     ILLMInferenceAgent,
     Response,
     Request,
     ResponseStatus
 } from "./interfaces/ISomniaAgents.sol";
+
+interface IVaultTVL {
+    function totalAssets() external view returns (uint256);
+}
 
 /// @title HajarGuardian
 /// @notice A two-tier autonomous security layer for DeFi protocols on Somnia.
@@ -31,11 +35,12 @@ contract HajarGuardian {
                                 CONFIG
     //////////////////////////////////////////////////////////////*/
 
-    ISomniaAgents public immutable platform;
+    IAgentRequester public immutable platform;
     address public owner;
     address public vault; // the protected protocol allowed to call checkWithdrawal
 
-    uint256 public llmAgentId; // from https://agents.somnia.network
+    // LLM Inference agent (Qwen3-30B) — same id on testnet & mainnet.
+    uint256 public llmAgentId; // 12847293847561029384 from https://agents.somnia.network
     uint256 public subcommitteeSize = 3;
     uint256 public costPerValidator = 0.07 ether; // STT per validator for LLM inference
 
@@ -101,7 +106,7 @@ contract HajarGuardian {
     }
 
     constructor(address platform_, uint256 llmAgentId_) {
-        platform = ISomniaAgents(platform_);
+        platform = IAgentRequester(platform_);
         llmAgentId = llmAgentId_;
         owner = msg.sender;
     }
@@ -198,12 +203,12 @@ contract HajarGuardian {
     /// @dev Best-effort escalation. MUST NOT revert: it runs inside the user's withdrawal,
     ///      so any revert here would block a legitimate withdrawal (availability DoS). If we
     ///      can't escalate (underfunded or on cooldown) we skip and let Tier-3/owner cover it.
-    function _escalateToAI(address user, uint256 amount, uint256 tvl) internal {
+    function _escalateToAI(address user, uint256 amount, uint256 tvl) internal returns (uint256) {
         // anti-griefing: one paid escalation per user per cooldown window.
         // (lastEscalation == 0 means "never escalated" — always allow the first one.)
         if (lastEscalation[user] != 0 && block.timestamp < lastEscalation[user] + escalationCooldown) {
             emit EscalationSkipped(user, "cooldown");
-            return;
+            return 0;
         }
 
         uint256 reserve = platform.getRequestDeposit();
@@ -211,16 +216,20 @@ contract HajarGuardian {
         uint256 needed = reserve + reward;
         if (address(this).balance < needed) {
             emit EscalationSkipped(user, "underfunded");
-            return; // fail open — never block the withdrawal
+            return 0; // fail open — never block the withdrawal
         }
 
         lastEscalation[user] = block.timestamp;
         string memory prompt = _buildPrompt(user, amount, tvl);
+        // Live inferNumber ABI: (prompt, system, minValue, maxValue, chainOfThought) -> int256.
+        // chainOfThought=false keeps it deterministic & cheap for byte-identical consensus.
         bytes memory payload = abi.encodeWithSelector(
             ILLMInferenceAgent.inferNumber.selector,
             prompt,
-            uint256(0),
-            uint256(100)
+            SYSTEM_PROMPT,
+            int256(0),
+            int256(100),
+            false
         );
 
         uint256 requestId = platform.createRequest{value: needed}(
@@ -232,6 +241,19 @@ contract HajarGuardian {
 
         pending[requestId] = PendingContext({user: user, amount: amount, tvl: tvl, active: true});
         emit EscalatedToAI(requestId, user, amount);
+        return requestId;
+    }
+
+    /// @notice Proactive, continuous autonomous monitoring. A cron job, keeper, or Reactivity
+    ///         subscription calls this on a schedule so Hajar assesses protocol health via the
+    ///         Somnia AI agent EVEN WHEN no withdrawal is happening — 24/7 autonomy, not just
+    ///         reactive defence. A high consensus risk score latches the breaker.
+    /// @return requestId 0 if skipped (cooldown/underfunded), else the agent request id.
+    function requestRiskCheck() external returns (uint256 requestId) {
+        if (msg.sender != owner && msg.sender != reactiveMonitor) revert NotMonitor();
+        uint256 tvl = vault == address(0) ? 0 : IVaultTVL(vault).totalAssets();
+        // address(this) marks a protocol-wide (not per-user) assessment.
+        return _escalateToAI(address(this), 0, tvl);
     }
 
     /// @notice Async callback invoked by the Somnia platform with all validator responses.
@@ -259,7 +281,11 @@ contract HajarGuardian {
             // require exactly 32 bytes so a malformed validator result can't revert the
             // whole callback (which would otherwise strand the request).
             if (responses[i].status == ResponseStatus.Success && responses[i].result.length == 32) {
-                sum += abi.decode(responses[i].result, (uint256));
+                // inferNumber returns int256, clamped to [0,100] by the agent.
+                int256 v = abi.decode(responses[i].result, (int256));
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                sum += uint256(v);
                 n++;
             }
         }
@@ -277,13 +303,15 @@ contract HajarGuardian {
         emit AIVerdict(requestId, riskScore, n, tripped);
     }
 
-    /// @dev Builds the natural-language context handed to the LLM agent.
-    ///      Keep it deterministic and information-dense — the better the context,
-    ///      the more meaningful the risk score.
+    /// @dev System role handed to the LLM agent (kept constant for deterministic consensus).
+    string internal constant SYSTEM_PROMPT =
+        "You are an autonomous DeFi security guardian. Given a withdrawal's context, rate how "
+        "likely it is a malicious exploit on a scale of 0 (clearly safe) to 100 (certain attack). "
+        "Consider the share of TVL, velocity, and address behaviour. Reply with the integer only.";
+
+    /// @dev Builds the data-only context for the agent. Deterministic & information-dense.
     function _buildPrompt(address user, uint256 amount, uint256 tvl) internal pure returns (string memory) {
         return string.concat(
-            "You are a DeFi security guardian. Rate how likely this withdrawal is a malicious ",
-            "exploit on a scale of 0 (safe) to 100 (certain attack). Reply with the number only. ",
             "Withdrawal amount (wei): ",
             _toString(amount),
             ". Total value locked before (wei): ",

@@ -112,13 +112,11 @@ contract HajarGuardianTest is Test {
     /// Callback must reject non-platform callers (anti-spoofing).
     function test_handleResponse_OnlyPlatform() public {
         Response[] memory empty = new Response[](0);
-        Request memory req = Request({
-            agentId: LLM_AGENT_ID,
-            requester: address(guardian),
-            callbackAddress: address(guardian),
-            callbackSelector: HajarGuardian.handleResponse.selector,
-            deposit: 0
-        });
+        Request memory req; // default-constructed; access check happens before any use
+        req.id = 1;
+        req.requester = address(guardian);
+        req.callbackAddress = address(guardian);
+        req.callbackSelector = HajarGuardian.handleResponse.selector;
 
         vm.prank(attacker);
         vm.expectRevert(HajarGuardian.NotPlatform.selector);
@@ -197,6 +195,24 @@ contract HajarGuardianTest is Test {
         // read-only velocity is still 30%, below both limits, so it must NOT latch.
         monitor.onWithdrawn(alice, 30 ether, 100 ether);
         assertFalse(guardian.paused(), "reactive path must not double-count into a false trip");
+    }
+
+    /// Autonomous monitoring: a keeper/owner can proactively ask the AI to assess protocol
+    /// health (no withdrawal needed); a high consensus score latches the breaker.
+    function test_RequestRiskCheck_Autonomous() public {
+        uint256 reqId = guardian.requestRiskCheck(); // owner-triggered proactive check
+        assertGt(reqId, 0, "should create an AI request");
+        assertFalse(guardian.paused());
+
+        platform.fulfillNumber(reqId, 88, 3); // validators agree: high risk
+        assertTrue(guardian.paused(), "proactive AI verdict should latch the breaker");
+    }
+
+    /// Only owner or the monitor (keeper) can spend STT on a proactive check.
+    function test_RequestRiskCheck_Gated() public {
+        vm.prank(attacker);
+        vm.expectRevert(HajarGuardian.NotMonitor.selector);
+        guardian.requestRiskCheck();
     }
 
     receive() external payable {}
