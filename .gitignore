@@ -13,3 +13,6 @@ broadcast/
 
 # local deploy notes
 deployed.txt
+
+# node deps (root, for reactivity-contracts)
+node_modules/
