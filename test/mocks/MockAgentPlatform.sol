@@ -93,6 +93,49 @@ contract MockAgentPlatform is IAgentRequester {
         );
     }
 
+    /// @notice Test helper: simulate validators returning an `inferToolsChat` tuple with the
+    ///         given `finishReason` (and empty conversation/tool-call arrays), then invoke the
+    ///         callback. Mirrors the 6-field return tuple shape.
+    function fulfillTools(uint256 requestId, string calldata finishReason, uint256 validatorCount) external {
+        Stored storage r = requests[requestId];
+        require(!r.fulfilled, "already fulfilled");
+        r.fulfilled = true;
+
+        bytes memory toolsResult = abi.encode(
+            finishReason,
+            "", // response
+            new string[](0), // updatedRoles
+            new string[](0), // updatedMessages
+            new uint256[](0), // pendingToolCallIds
+            new bytes[](0) // pendingToolCalls
+        );
+
+        Response[] memory responses = new Response[](validatorCount);
+        for (uint256 i = 0; i < validatorCount; i++) {
+            responses[i] = Response({
+                validator: address(uint160(0xA11DA700 + i)),
+                result: toolsResult,
+                status: ResponseStatus.Success,
+                receipt: requestId * 1000 + i,
+                timestamp: block.timestamp,
+                executionCost: 0.07 ether
+            });
+        }
+
+        Request memory details;
+        details.id = requestId;
+        details.requester = r.requester;
+        details.callbackAddress = r.callbackAddress;
+        details.callbackSelector = r.callbackSelector;
+        details.responses = responses;
+        details.responseCount = validatorCount;
+        details.status = ResponseStatus.Success;
+
+        IAgentRequesterHandler(r.callbackAddress).handleResponse(
+            requestId, responses, ResponseStatus.Success, details
+        );
+    }
+
     /// @notice Flexible fulfill: per-validator score + status (test mixed/failed/negative).
     function fulfillCustom(uint256 requestId, int256[] calldata scores, uint8[] calldata statuses)
         external

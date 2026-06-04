@@ -27,6 +27,11 @@ Multi-tenant three-tier security layer. Somnia Agent calls are **async** (reques
   **JSON API agent** (`fetchUint`); divergence from `referencePrice` latches the breaker.
 - **Tier 2c** (`requestThreatScan` / `requestThreatScanJson`, `Kind.Threat`): self-updating threat
   intel via **Parse Website** (`ExtractANumber`) + JSON API agents; high threat score latches.
+- **Tier 2d** (`requestAutonomousRemediation`, `Kind.Tools`): LLM **tools-chat** (`inferToolsChat`,
+  selector `0xd0683905`, OnchainTool{string signature; string description}). AI is offered the
+  `pause()` tool and decides whether to ACT; callback latches on finishReason=="tool_calls".
+  Safe-by-design (only a pause, never raw agent calldata). Callback decodes only finishReason
+  (try/catch) — full pendingToolCalls decode pending a live response sample.
 - **Tier 3** (`HajarReactiveSubscriber.onEvent` → `onReactiveSignal`): real validator-triggered
   Reactivity subscription that latches in a separate execution.
 

@@ -106,6 +106,38 @@ interface ILLMInferenceAgent {
     ) external returns (string memory response);
 }
 
+/// @notice LLM Inference Agent — tools-chat method (autonomous on-chain remediation).
+/// @dev    Same agentId as the LLM Inference agent (12847293847561029384). The agent is given a
+///         set of on-chain tools and decides whether to call them. Canonical signature
+///         `inferToolsChat(string[],string[],string[],(string,string)[],uint256,bool)` →
+///         selector 0xd0683905 (confirmed by the Somnia team). The LLM returns a finishReason
+///         ("stop" | "tool_calls" | ...), the assistant text, the updated conversation, and
+///         `pendingToolCalls` (ABI-encoded calldata per tool the agent chose to invoke).
+interface IToolsChatAgent {
+    struct OnchainTool {
+        string signature; // e.g. "pause()"
+        string description; // natural-language hint for the LLM
+    }
+
+    function inferToolsChat(
+        string[] calldata roles,
+        string[] calldata messages,
+        string[] calldata mcpServerUrls,
+        OnchainTool[] calldata onchainTools,
+        uint256 maxIterations,
+        bool chainOfThought
+    )
+        external
+        returns (
+            string memory finishReason,
+            string memory response,
+            string[] memory updatedRoles,
+            string[] memory updatedMessages,
+            uint256[] memory pendingToolCallIds,
+            bytes[] memory pendingToolCalls
+        );
+}
+
 /// @notice JSON API Request Agent. agentId 13174292974160097713. ~0.03 STT / validator.
 interface IJsonApiAgent {
     function fetchUint(string calldata url, string calldata selector, uint8 decimals)

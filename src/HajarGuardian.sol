@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {
     IAgentRequester,
     ILLMInferenceAgent,
+    IToolsChatAgent,
     IJsonApiAgent,
     IParseWebsiteAgent,
     Response,
@@ -41,6 +42,7 @@ contract HajarGuardian {
     uint256 public parseAgentId = 12875401142070969085; // LLM Parse Website agent (threat intel)
     uint256 public subcommitteeSize = 3;
     uint256 public costPerValidator = 0.07 ether; // LLM inference cost / validator
+    uint256 public toolsCostPerValidator = 0.07 ether; // LLM tools-chat cost / validator
     uint256 public jsonCostPerValidator = 0.03 ether; // JSON API cost / validator (verified live)
     uint256 public parseCostPerValidator = 0.1 ether; // Parse Website cost / validator
     uint256 public escalationCooldown = 60;
@@ -75,7 +77,8 @@ contract HajarGuardian {
     enum Kind {
         Risk, // LLM inference risk score
         Price, // JSON API external price
-        Threat // Parse Website threat-intel score
+        Threat, // Parse Website threat-intel score
+        Tools // LLM tools-chat autonomous remediation (agent emits tool calls)
     }
 
     struct PendingContext {
@@ -136,6 +139,8 @@ contract HajarGuardian {
     event ThreatFeedSet(address indexed vault, string url);
     event ThreatScanned(uint256 indexed requestId, address indexed vault);
     event ThreatVerdict(uint256 indexed requestId, address indexed vault, uint256 threatScore, bool alarm);
+    event RemediationRequested(uint256 indexed requestId, address indexed vault);
+    event RemediationVerdict(uint256 indexed requestId, address indexed vault, string finishReason, bool acted);
     event CircuitBreakerTripped(address indexed vault, string reason);
     event CircuitBreakerReset(address indexed vault);
     event OwnershipTransferStarted(address indexed from, address indexed to);
@@ -434,6 +439,70 @@ contract HajarGuardian {
         return _escalateToAI(vault, address(this), 0, tvl, 0, windowBps);
     }
 
+    /*//////////////////////////////////////////////////////////////
+        AUTONOMOUS REMEDIATION (LLM tools-chat) — Tier 2d (agent acts)
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Ask the LLM agent — given a set of on-chain tools — to decide whether to ACT, not
+    ///         just score. The agent is offered a single SAFE tool (pause). If it returns a tool
+    ///         call (finishReason != "stop"), the callback latches this vault's breaker. We never
+    ///         execute arbitrary agent-supplied calldata: the only consequence is a pause, which a
+    ///         protocol admin can `resetBreaker`. This is the agent-first endgame for Somnia —
+    ///         the AI takes autonomous on-chain action, verified by validator consensus.
+    /// @dev    Uses the LLM Inference agent (`llmAgentId`) via `inferToolsChat`
+    ///         (selector 0xd0683905). The exact tools-chat callback-tuple delivery format is still
+    ///         being confirmed on the live platform; this handler decodes only the leading
+    ///         `finishReason` string (safe) inside a try/catch.
+    function requestAutonomousRemediation(address vault) external returns (uint256 requestId) {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.admin && msg.sender != p.monitor) revert NotProtocolAdmin();
+
+        uint256 needed = platform.getRequestDeposit() + (toolsCostPerValidator * subcommitteeSize);
+        if (address(this).balance < needed) {
+            emit EscalationSkipped(vault, address(this), "underfunded");
+            return 0;
+        }
+
+        string[] memory roles = new string[](1);
+        roles[0] = "user";
+        string[] memory messages = new string[](1);
+        messages[0] = _buildRemediationPrompt(vault);
+        string[] memory mcp = new string[](0);
+        IToolsChatAgent.OnchainTool[] memory tools = new IToolsChatAgent.OnchainTool[](1);
+        tools[0] = IToolsChatAgent.OnchainTool({
+            signature: "pause()",
+            description: "Pause the protocol / latch the circuit breaker ONLY if you have strong "
+                "evidence it is under an active drain or exploit. Otherwise return without calling it."
+        });
+
+        bytes memory payload = abi.encodeWithSelector(
+            IToolsChatAgent.inferToolsChat.selector, roles, messages, mcp, tools, uint256(3), true
+        );
+        requestId = platform.createRequest{value: needed}(
+            llmAgentId, address(this), this.handleResponse.selector, payload
+        );
+        pending[requestId] =
+            PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, kind: Kind.Tools});
+        emit RemediationRequested(requestId, vault);
+    }
+
+    function _buildRemediationPrompt(address vault) internal view returns (string memory) {
+        uint256 tvl = IVaultTVL(vault).totalAssets();
+        return string.concat(
+            "You guard DeFi protocol ",
+            _toHexString(vault),
+            " (TVL ",
+            _toString(tvl),
+            " wei). If you judge it is under an active exploit, call pause(). If it looks safe, do nothing."
+        );
+    }
+
+    /// @dev External so it can be invoked via `try this.decodeFinishReason(...)` — isolates a
+    ///      malformed tools-chat result so a bad decode can never revert the whole callback.
+    function decodeFinishReason(bytes calldata result) external pure returns (string memory) {
+        return abi.decode(result, (string)); // first element of the tools-chat return tuple
+    }
+
     function handleResponse(
         uint256 requestId,
         Response[] calldata responses,
@@ -447,6 +516,31 @@ contract HajarGuardian {
 
         if (status != ResponseStatus.Success || responses.length == 0) {
             emit AIVerdict(requestId, ctx.vault, 0, responses.length, false);
+            return;
+        }
+
+        if (ctx.kind == Kind.Tools) {
+            // Tools-chat: the leading tuple element is `finishReason`. "tool_calls" means the
+            // agent chose to invoke the pause tool -> latch (fail-closed: any other/empty/unknown
+            // finishReason does NOT act). We decode only that one string, isolated in try/catch.
+            bool acted;
+            string memory finishReason;
+            for (uint256 i = 0; i < responses.length; i++) {
+                if (responses[i].status == ResponseStatus.Success && responses[i].result.length >= 192) {
+                    try this.decodeFinishReason(responses[i].result) returns (string memory fr) {
+                        if (keccak256(bytes(fr)) == keccak256(bytes("tool_calls"))) {
+                            acted = true;
+                            finishReason = fr;
+                        }
+                    } catch {}
+                    if (acted) break;
+                }
+            }
+            if (acted) {
+                protocols[ctx.vault].paused = true;
+                emit CircuitBreakerTripped(ctx.vault, "tier2d-ai-remediation");
+            }
+            emit RemediationVerdict(requestId, ctx.vault, finishReason, acted);
             return;
         }
 

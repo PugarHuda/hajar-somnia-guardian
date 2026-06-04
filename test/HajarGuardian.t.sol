@@ -7,7 +7,7 @@ import {ProtectedVault} from "../src/ProtectedVault.sol";
 import {MockAgentPlatform} from "./mocks/MockAgentPlatform.sol";
 import {HajarReactiveMonitor} from "../src/HajarReactiveMonitor.sol";
 import {Exploiter} from "../src/demo/Exploiter.sol";
-import {Response, Request, ResponseStatus} from "../src/interfaces/ISomniaAgents.sol";
+import {Response, Request, ResponseStatus, IToolsChatAgent} from "../src/interfaces/ISomniaAgents.sol";
 
 contract HajarGuardianTest is Test {
     HajarGuardian guardian;
@@ -64,6 +64,33 @@ contract HajarGuardianTest is Test {
         vault.withdraw(20 ether);
         platform.fulfillNumber(1, 10, 3);
         assertFalse(guardian.paused(address(vault)));
+    }
+
+    /// The Somnia team confirmed the canonical signature → selector. Lock it in so a refactor
+    /// can't silently break the payload encoding.
+    function test_InferToolsChat_SelectorMatchesLiveABI() public pure {
+        assertEq(IToolsChatAgent.inferToolsChat.selector, bytes4(0xd0683905));
+    }
+
+    /// Tier-2d: the agent returns a tool call ("tool_calls") → guardian latches the breaker.
+    function test_Tier2d_Remediation_ToolCall_Latches() public {
+        uint256 id = guardian.requestAutonomousRemediation(address(vault));
+        assertFalse(guardian.paused(address(vault)));
+        platform.fulfillTools(id, "tool_calls", 3);
+        assertTrue(guardian.paused(address(vault)));
+    }
+
+    /// Tier-2d: the agent declines to act ("stop") → no latch (fail-closed on action).
+    function test_Tier2d_Remediation_Stop_NoLatch() public {
+        uint256 id = guardian.requestAutonomousRemediation(address(vault));
+        platform.fulfillTools(id, "stop", 3);
+        assertFalse(guardian.paused(address(vault)));
+    }
+
+    function test_Tier2d_Remediation_Gated() public {
+        vm.prank(attacker);
+        vm.expectRevert(HajarGuardian.NotProtocolAdmin.selector);
+        guardian.requestAutonomousRemediation(address(vault));
     }
 
     function test_PauseBlocksEveryone_UntilReset() public {

@@ -1,5 +1,34 @@
 # Discord message — #technical-questions (Somnia Agentathon)
 
+## ✅ ANSWERED by the Somnia team (emrey.somi)
+
+The `onchainTools` tuple is:
+
+```solidity
+struct OnchainTool {
+    string signature;    // e.g. "pause()"
+    string description;  // hint for the LLM
+}
+```
+
+Canonical signature → selector:
+`inferToolsChat(string[],string[],string[],(string,string)[],uint256,bool)` → **`0xd0683905`**
+
+The LLM returns `(finishReason, response, updatedRoles[], updatedMessages[],
+pendingToolCallIds[], pendingToolCalls[])`; `pendingToolCalls[]` holds ABI-encoded calldata
+per tool. Loop: execute the calldata, append the result as a `"tool"` role message, call again
+until `finishReason == "stop"`.
+
+**Wired in Hajar as Tier-2d** (`requestAutonomousRemediation`): the guardian offers the LLM one
+safe tool (`pause()`) and latches the breaker when the agent returns a tool call. Selector locked
+by a unit test (`test_InferToolsChat_SelectorMatchesLiveABI`). The exact on-chain delivery format
+of the return tuple in `Response[].result` is still to be confirmed against a live response
+sample — the callback decodes only the leading `finishReason` string, inside a try/catch.
+
+---
+
+## Original question (kept for reference)
+
 Copy-paste this into the Somnia Discord `#❓technical-questions` channel:
 
 ---

@@ -29,6 +29,7 @@ in-flight transaction on an AI verdict. Hajar embraces that with a layered desig
 | **2 — AI judgment** | Async, Somnia **LLM Inference** agent (`inferNumber`) | Grey-zone activity (`>= greyBps` of TVL) | Validators run Qwen3-30B deterministically and reach **consensus** on a 0–100 risk score. If `>= risk`, Hajar **latches** the circuit breaker, pausing all withdrawals. |
 | **2b — Price oracle** | Async, Somnia **JSON API** agent (`fetchUint`) | On demand / scheduled | Fetches the real market price from a public endpoint and compares it to the protocol's reference price. A divergence `>= maxDivergenceBps` latches the breaker — catching **oracle manipulation / depeg** the velocity & LLM tiers can't see. |
 | **2c — Threat intel** | Async, Somnia **Parse Website** agent (`ExtractANumber`) + JSON API | Scheduled (cron) | Scrapes a security/advisory page (or polls a threat-intel API) for a 0–100 threat score. A high score latches the breaker, so the guardian **continuously learns** about new exploit patterns. |
+| **2d — Autonomous remediation** | Async, Somnia **LLM tools-chat** (`inferToolsChat`) | On demand | The agent is given an on-chain tool (`pause()`) and **decides whether to act**, not just score. If it returns a tool call, the callback latches the breaker. The AI takes autonomous on-chain action — verified by validator consensus. (Safe by design: the only consequence is a pause an admin can reset; raw agent calldata is never executed.) |
 | **3 — Reactivity latch** | Event-driven, **validator-triggered** | On the vault's `Withdrawn` event | A real Somnia Reactivity subscription fires in a *separate* execution and can latch the breaker persistently — the one thing the synchronous Tier-1 path cannot do. |
 
 ```
@@ -90,9 +91,9 @@ in-flight transaction on an AI verdict. Hajar embraces that with a layered desig
 
 ```bash
 forge build
-forge test -vv     # 28 passing tests: 3 tiers, price oracle, threat intel,
-                   # pause/reset, whitelist, multi-tenant isolation, velocity,
-                   # reentrancy, fuzz, auth guards
+forge test -vv     # 32 passing tests: all tiers, price oracle, threat intel,
+                   # autonomous remediation (tools-chat), pause/reset, whitelist,
+                   # multi-tenant isolation, velocity, reentrancy, fuzz, auth guards
 ```
 
 ## Deploy to Somnia testnet
@@ -159,10 +160,14 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
   Tier-1 already allowed. Its real value is **reactive-only protection for protocols that do NOT
   add the sync hook** — the subscription still fires and is genuinely validator-triggered (proven
   on-chain). It's a layered safety net, not a duplicate.
-- **`inferToolsChat` (autonomous remediation) — roadmap:** the next agent-first upgrade is having
-  the AI emit on-chain remediation calldata, not just a score. It's blocked on the `onchainTools`
-  tuple ABI, which isn't published on the agent page, so the function selector can't be computed
-  reliably yet (see `DISCORD_QUESTION.md`). We don't guess selectors.
+- **`inferToolsChat` (autonomous remediation) — implemented (Tier-2d):** the Somnia team confirmed
+  the `onchainTools` tuple (`struct OnchainTool { string signature; string description; }`) and the
+  canonical selector `0xd0683905` (locked by `test_InferToolsChat_SelectorMatchesLiveABI`).
+  `requestAutonomousRemediation` offers the LLM one safe tool (`pause()`) and latches on a tool
+  call. The request-side encoding is correct and ready; the exact on-chain delivery format of the
+  return tuple in `Response[].result` is still to be confirmed against a live sample, so the
+  callback decodes only the leading `finishReason` (fail-closed, inside try/catch). See
+  `DISCORD_QUESTION.md`.
 
 ## Somnia deploy gotchas (learned the hard way)
 
@@ -181,11 +186,12 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 - [x] Proactive autonomous monitoring (`requestRiskCheck`) for 24/7 AI health checks
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] `ISomniaAgents` reconciled to the live ABI; real agent ids wired
-- [x] **28 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation)
+- [x] **32 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation, tools-chat remediation)
+- [x] Tier-2d autonomous remediation (`inferToolsChat`) — selector `0xd0683905` confirmed + locked by test
 - [x] All tiers deployed + live-verified on Somnia testnet (real validator consensus):
       Tier-1 (block), Tier-2 LLM (score 0, 2 validators), Tier-2b price oracle, Tier-2c JSON
       threat, Tier-3 reactivity
 - [x] Interactive frontend dashboard live on Vercel
 - [ ] Demo video (2–5 min)
-- [ ] (roadmap) `inferToolsChat` agent that emits remediation calldata — pending the
-      `onchainTools` tuple ABI so the selector can be computed correctly
+- [ ] Confirm the tools-chat callback tuple format against a live response sample, then decode
+      `pendingToolCalls` fully (request-side + selector already done)
