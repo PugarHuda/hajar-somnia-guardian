@@ -40,9 +40,12 @@ export default function Home() {
           functionName: "totalAssets",
         }),
       ]);
-      const p = proto as unknown as {
-        hardBps: bigint; rapidBps: bigint; greyBps: bigint; risk: bigint;
-      };
+      // viem returns a multi-output getter as an array; older/other shapes may give an object.
+      // Handle both so a shape change can never crash the client.
+      const pa = proto as any;
+      const p = Array.isArray(pa)
+        ? { hardBps: pa[4] as bigint, rapidBps: pa[5] as bigint, greyBps: pa[6] as bigint, risk: pa[7] as bigint }
+        : { hardBps: pa.hardBps as bigint, rapidBps: pa.rapidBps as bigint, greyBps: pa.greyBps as bigint, risk: pa.risk as bigint };
       setS({ paused: paused as boolean, hardBps: p.hardBps, rapidBps: p.rapidBps, greyBps: p.greyBps, risk: p.risk, agentId: agentId as bigint, jsonId: jsonId as bigint, parseId: parseId as bigint, tvl: tvl as bigint });
       setErr(null);
       setAt(new Date().toLocaleTimeString());
@@ -141,7 +144,7 @@ export default function Home() {
             <div className="meta">async · Somnia LLM Inference agent · grey zone ≥ {pct(s?.greyBps)}</div>
             <p>
               Ambiguous activity is escalated to Somnia&apos;s deterministic LLM agent. Validators
-              run the model and reach consensus on a 0–100 risk score; ≥ {s ? s.risk.toString() : "—"}{" "}
+              run the model and reach consensus on a 0–100 risk score; ≥ {s?.risk != null ? s.risk.toString() : "—"}{" "}
               latches the breaker. The verdict carries a receipt and N validator signatures — auditable on-chain.
             </p>
             <p className="subagents">

@@ -39,8 +39,9 @@ export default function DemoConsole() {
     ]);
     setStt(Number(formatEther(bal)).toFixed(4));
     setVaultBal(Number(formatEther(vb as bigint)).toFixed(4));
-    const admin = (proto as unknown as { admin: string }).admin;
-    setIsAdmin(admin.toLowerCase() === acc.toLowerCase());
+    const pa = proto as any;
+    const admin: string = (Array.isArray(pa) ? pa[2] : pa?.admin) ?? "";
+    setIsAdmin(!!admin && admin.toLowerCase() === acc.toLowerCase());
   }, []);
 
   const onConnect = async () => {
