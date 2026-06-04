@@ -47,6 +47,22 @@ receipts.
 > "The verdict lives on-chain with a receipt per validator — fully auditable. If the score
 > crosses the threshold, the breaker latches and every withdrawal pauses."
 
+## Shot 3.5 — Tier-2d: the agent ACTS, not just scores (the agentic moment) ★★
+Show the explorer for guardian v3's `RemediationVerdict` from the live test (or call
+`requestAutonomousRemediation` as admin). Open the validator response and read the LLM's
+on-chain reasoning aloud:
+> "Here's the strongest part. Hajar doesn't just ask the AI for a score — it gives the agent a
+> `pause()` tool via `inferToolsChat` and lets it DECIDE whether to act. Validators reached
+> consensus; the model reasoned, on-chain: *'the protocol appears to be operating normally… no
+> action required'* — and correctly chose **not** to pause. The agent takes autonomous on-chain
+> action, and it's safe-by-design: the only tool it can ever call is pause, which an admin resets.
+> Arbitrary AI calldata is never executed."
+
+## Shot 3.7 — Agent-discoverable (Somnia is an Agentic L1) (optional, 15s)
+Hit `https://hajar-somnia-guardian.vercel.app/api/mcp` and `/api/state` in the browser.
+> "And because Somnia's whole thesis is that the main users are AIs, Hajar exposes a lite MCP
+> tool catalog — any other agent can discover it and read a protocol's live security posture."
+
 ## Shot 4 — Reset + multi-tenant (2:20–2:45)
 If breaker tripped: click **♻️ Reset Breaker** (admin) → pill back to ACTIVE.
 > "Any protocol can `registerProtocol` its vault and instantly get its own admin, thresholds,

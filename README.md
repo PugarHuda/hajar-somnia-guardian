@@ -9,7 +9,9 @@ Any protocol can `registerProtocol()` its vault and instantly get exploit protec
 **Hajar-as-a-Service**. Each protocol gets its own admin, thresholds, and circuit breaker.
 
 - **Live frontend:** https://hajar-somnia-guardian.vercel.app
+- **Agent-discoverable (lite MCP):** [`/api/mcp`](https://hajar-somnia-guardian.vercel.app/api/mcp) tool catalog · [`/api/state`](https://hajar-somnia-guardian.vercel.app/api/state) live JSON state
 - **GitHub:** https://github.com/PugarHuda/hajar-somnia-guardian
+- **Security model & threat analysis:** [`SECURITY.md`](./SECURITY.md)
 - **Chain:** Somnia Shannon testnet (chainId 50312, token STT)
 
 ## The problem
