@@ -497,10 +497,34 @@ contract HajarGuardian {
         );
     }
 
-    /// @dev External so it can be invoked via `try this.decodeFinishReason(...)` — isolates a
-    ///      malformed tools-chat result so a bad decode can never revert the whole callback.
-    function decodeFinishReason(bytes calldata result) external pure returns (string memory) {
-        return abi.decode(result, (string)); // first element of the tools-chat return tuple
+    /// @notice keccak256("pause()")[:4] — the one safe remediation tool the agent may invoke.
+    bytes4 internal constant PAUSE_SELECTOR = 0x8456cb59;
+
+    /// @dev Fully decode the `inferToolsChat` return tuple
+    ///      `(string,string,string[],string[],uint256[],bytes[])` — confirmed against live
+    ///      platform bytes — and report whether the agent emitted a `pause()` tool call.
+    ///      External so it runs under `try`, isolating any decode failure from the callback.
+    function decodeToolsRemediation(bytes calldata result)
+        external
+        pure
+        returns (bool pauseRequested, string memory finishReason)
+    {
+        bytes[] memory calls;
+        (finishReason,,,,, calls) =
+            abi.decode(result, (string, string, string[], string[], uint256[], bytes[]));
+        for (uint256 i = 0; i < calls.length; i++) {
+            bytes memory c = calls[i];
+            if (c.length >= 4) {
+                bytes4 sel;
+                assembly {
+                    sel := mload(add(c, 0x20))
+                }
+                if (sel == PAUSE_SELECTOR) {
+                    pauseRequested = true;
+                    break;
+                }
+            }
+        }
     }
 
     function handleResponse(
@@ -520,18 +544,16 @@ contract HajarGuardian {
         }
 
         if (ctx.kind == Kind.Tools) {
-            // Tools-chat: the leading tuple element is `finishReason`. "tool_calls" means the
-            // agent chose to invoke the pause tool -> latch (fail-closed: any other/empty/unknown
-            // finishReason does NOT act). We decode only that one string, isolated in try/catch.
+            // Tools-chat: fully decode the return tuple and act iff the agent emitted a `pause()`
+            // tool call. Fail-closed — only the whitelisted pause selector latches; arbitrary
+            // agent-supplied calldata is NEVER executed. Decode is isolated in try/catch.
             bool acted;
             string memory finishReason;
             for (uint256 i = 0; i < responses.length; i++) {
                 if (responses[i].status == ResponseStatus.Success && responses[i].result.length >= 192) {
-                    try this.decodeFinishReason(responses[i].result) returns (string memory fr) {
-                        if (keccak256(bytes(fr)) == keccak256(bytes("tool_calls"))) {
-                            acted = true;
-                            finishReason = fr;
-                        }
+                    try this.decodeToolsRemediation(responses[i].result) returns (bool pauseReq, string memory fr) {
+                        finishReason = fr;
+                        if (pauseReq) acted = true;
                     } catch {}
                     if (acted) break;
                 }

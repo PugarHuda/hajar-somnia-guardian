@@ -93,6 +93,24 @@ contract HajarGuardianTest is Test {
         guardian.requestAutonomousRemediation(address(vault));
     }
 
+    /// Safety: the full pendingToolCalls decode honors ONLY the whitelisted pause() selector.
+    /// Any other agent-supplied calldata is ignored — the guardian never executes it.
+    function test_Tier2d_DecodeToolsRemediation_OnlyPauseActs() public view {
+        bytes[] memory pauseCall = new bytes[](1);
+        pauseCall[0] = hex"8456cb59"; // pause()
+        bytes memory withPause =
+            abi.encode("tool_calls", "", new string[](0), new string[](0), new uint256[](0), pauseCall);
+        (bool p1,) = guardian.decodeToolsRemediation(withPause);
+        assertTrue(p1, "pause() must be honored");
+
+        bytes[] memory otherCall = new bytes[](1);
+        otherCall[0] = hex"deadbeef"; // some other selector
+        bytes memory withOther =
+            abi.encode("tool_calls", "", new string[](0), new string[](0), new uint256[](0), otherCall);
+        (bool p2,) = guardian.decodeToolsRemediation(withOther);
+        assertFalse(p2, "non-pause calldata must be ignored");
+    }
+
     function test_PauseBlocksEveryone_UntilReset() public {
         vm.prank(alice);
         vault.withdraw(20 ether);

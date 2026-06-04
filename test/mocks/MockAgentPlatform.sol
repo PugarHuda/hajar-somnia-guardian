@@ -101,13 +101,23 @@ contract MockAgentPlatform is IAgentRequester {
         require(!r.fulfilled, "already fulfilled");
         r.fulfilled = true;
 
+        // Mirror the live tuple: when the agent decides to act ("tool_calls"), it returns the
+        // tool's calldata (here, pause() = 0x8456cb59) in pendingToolCalls; otherwise empty.
+        bytes[] memory pendingCalls;
+        if (keccak256(bytes(finishReason)) == keccak256(bytes("tool_calls"))) {
+            pendingCalls = new bytes[](1);
+            pendingCalls[0] = hex"8456cb59";
+        } else {
+            pendingCalls = new bytes[](0);
+        }
+
         bytes memory toolsResult = abi.encode(
             finishReason,
-            "", // response
+            "<no_tool_call>", // response
             new string[](0), // updatedRoles
             new string[](0), // updatedMessages
             new uint256[](0), // pendingToolCallIds
-            new bytes[](0) // pendingToolCalls
+            pendingCalls // pendingToolCalls (ABI-encoded calldata per tool)
         );
 
         Response[] memory responses = new Response[](validatorCount);

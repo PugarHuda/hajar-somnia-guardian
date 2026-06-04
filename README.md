@@ -91,7 +91,7 @@ in-flight transaction on an AI verdict. Hajar embraces that with a layered desig
 
 ```bash
 forge build
-forge test -vv     # 32 passing tests: all tiers, price oracle, threat intel,
+forge test -vv     # 33 passing tests: all tiers, price oracle, threat intel,
                    # autonomous remediation (tools-chat), pause/reset, whitelist,
                    # multi-tenant isolation, velocity, reentrancy, fuzz, auth guards
 ```
@@ -172,12 +172,13 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 - **`inferToolsChat` (autonomous remediation) — implemented (Tier-2d):** the Somnia team confirmed
   the `onchainTools` tuple (`struct OnchainTool { string signature; string description; }`) and the
   canonical selector `0xd0683905` (locked by `test_InferToolsChat_SelectorMatchesLiveABI`).
-  `requestAutonomousRemediation` offers the LLM one safe tool (`pause()`) and latches on a tool
-  call. **Verified live** (guardian v3): a real `inferToolsChat` reached validator consensus and
-  the return-tuple format (leading `finishReason` string) was confirmed against on-chain bytes;
-  the callback decodes `finishReason` fail-closed inside a try/catch and acts only on
-  `"tool_calls"`. Decoding the full `pendingToolCalls` array (for executing multi-tool flows) is
-  the remaining extension. See `DISCORD_QUESTION.md`.
+  `requestAutonomousRemediation` offers the LLM one safe tool (`pause()`) and latches when the
+  agent returns that tool call. **Verified live** (guardian v3): a real `inferToolsChat` reached
+  validator consensus and the full return-tuple `(string,string,string[],string[],uint256[],
+  bytes[])` was confirmed against on-chain bytes. The callback now **fully decodes
+  `pendingToolCalls`** (isolated in try/catch) and matches each call's 4-byte selector against the
+  whitelisted `pause()` (`0x8456cb59`) — arbitrary agent calldata is **never executed**, only the
+  one safe action is honored. See `DISCORD_QUESTION.md`.
 
 ## Somnia deploy gotchas (learned the hard way)
 
@@ -196,7 +197,7 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 - [x] Proactive autonomous monitoring (`requestRiskCheck`) for 24/7 AI health checks
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] `ISomniaAgents` reconciled to the live ABI; real agent ids wired
-- [x] **32 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation, tools-chat remediation)
+- [x] **33 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation, tools-chat remediation)
 - [x] Tier-2d autonomous remediation (`inferToolsChat`) — **deployed + verified live** (selector
       `0xd0683905` test-locked; consensus reached; AI declined to act on a healthy vault)
 - [x] All tiers deployed + live-verified on Somnia testnet (real validator consensus):
@@ -204,5 +205,6 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
       threat, Tier-3 reactivity
 - [x] Interactive frontend dashboard live on Vercel
 - [ ] Demo video (2–5 min)
-- [ ] Decode the full `pendingToolCalls` array for multi-tool execution flows (request-side,
-      selector, finishReason decode, and live consensus already confirmed)
+- [x] Full `pendingToolCalls` decode + `pause()`-selector whitelist (safety: arbitrary agent
+      calldata is never executed) — request-side, selector, live consensus all confirmed
+- [ ] (stretch) multi-tool execution loop (append tool result, re-call until `finishReason=="stop"`)

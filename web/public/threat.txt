@@ -1,0 +1,10 @@
+Hajar Threat Intelligence Feed — monitored DeFi protocol status
+
+This page reports a single machine-readable threat score for an automated
+on-chain security guardian to extract.
+
+THREAT_LEVEL = 5
+
+Scale: 0 means no known threat, 100 means the protocol is under active attack.
+Current assessment: routine. No active exploit or drain detected.
+THREAT_LEVEL = 5
