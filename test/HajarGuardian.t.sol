@@ -216,5 +216,21 @@ contract HajarGuardianTest is Test {
         assertFalse(guardian.paused(address(vault)));
     }
 
+    /// Threat intel (Parse Website agent): a high scraped threat score latches the breaker.
+    function test_ThreatIntel_HighScoreTrips() public {
+        guardian.setThreatFeed(address(vault), "https://rekt.news", "is this protocol exploited", 70, 50, 1);
+        uint256 reqId = guardian.requestThreatScan(address(vault));
+        platform.fulfillNumber(reqId, 85, 3); // scraped threat 85 >= 70
+        assertTrue(guardian.paused(address(vault)), "high threat should latch breaker");
+    }
+
+    /// Low threat score keeps the protocol running.
+    function test_ThreatIntel_LowScore_NoTrip() public {
+        guardian.setThreatFeed(address(vault), "https://rekt.news", "is this protocol exploited", 70, 50, 1);
+        uint256 reqId = guardian.requestThreatScan(address(vault));
+        platform.fulfillNumber(reqId, 20, 3);
+        assertFalse(guardian.paused(address(vault)));
+    }
+
     receive() external payable {}
 }

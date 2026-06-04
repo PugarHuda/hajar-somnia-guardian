@@ -112,3 +112,19 @@ interface IJsonApiAgent {
         external
         returns (uint256);
 }
+
+/// @notice LLM Parse Website Agent. agentId 12875401142070969085. ~0.10 STT / validator.
+/// @dev Selector is case-sensitive: "ExtractANumber".
+interface IParseWebsiteAgent {
+    function ExtractANumber(
+        string calldata key,
+        string calldata description,
+        uint256 min,
+        uint256 max,
+        string calldata prompt,
+        string calldata url,
+        bool resolveUrl,
+        uint8 numPages,
+        uint8 confidenceThreshold
+    ) external returns (uint256 output);
+}

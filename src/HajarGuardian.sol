@@ -5,6 +5,7 @@ import {
     IAgentRequester,
     ILLMInferenceAgent,
     IJsonApiAgent,
+    IParseWebsiteAgent,
     Response,
     Request,
     ResponseStatus
@@ -37,9 +38,11 @@ contract HajarGuardian {
 
     uint256 public llmAgentId; // 12847293847561029384
     uint256 public jsonAgentId = 13174292974160097713; // JSON API Request agent (price oracle)
+    uint256 public parseAgentId = 12875401142070969085; // LLM Parse Website agent (threat intel)
     uint256 public subcommitteeSize = 3;
     uint256 public costPerValidator = 0.07 ether; // LLM inference cost / validator
     uint256 public jsonCostPerValidator = 0.03 ether; // JSON API cost / validator (verified live)
+    uint256 public parseCostPerValidator = 0.1 ether; // Parse Website cost / validator
     uint256 public escalationCooldown = 60;
     uint256 public windowSeconds = 300;
 
@@ -69,16 +72,34 @@ contract HajarGuardian {
     mapping(address vault => mapping(address user => uint256)) public lastEscalation;
     mapping(address vault => mapping(address user => bool)) public whitelisted;
 
+    enum Kind {
+        Risk, // LLM inference risk score
+        Price, // JSON API external price
+        Threat // Parse Website threat-intel score
+    }
+
     struct PendingContext {
         address vault;
         address user;
         uint256 amount;
         uint256 tvl;
         bool active;
-        bool isPrice; // true => JSON API price-feed response, false => LLM risk score
+        Kind kind;
     }
 
     mapping(uint256 requestId => PendingContext) public pending;
+
+    /// @notice Self-updating threat-intelligence feed per protocol (learns about new exploits).
+    struct ThreatFeed {
+        bool enabled;
+        string url; // a security feed (e.g. an advisory / incident page)
+        string prompt; // what to assess
+        uint8 threatThreshold; // 0..100 score that latches the breaker
+        uint8 confidenceThreshold;
+        uint8 numPages;
+    }
+
+    mapping(address vault => ThreatFeed) public threatFeeds;
 
     /// @notice Optional external price-sanity feed per protocol (oracle-manipulation detection).
     struct PriceFeed {
@@ -107,6 +128,9 @@ contract HajarGuardian {
     event PriceFeedSet(address indexed vault, string url, string selector);
     event PriceChecked(uint256 indexed requestId, address indexed vault);
     event PriceVerdict(uint256 indexed requestId, address indexed vault, uint256 marketPrice, uint256 referencePrice, uint256 divergenceBps, bool alarm);
+    event ThreatFeedSet(address indexed vault, string url);
+    event ThreatScanned(uint256 indexed requestId, address indexed vault);
+    event ThreatVerdict(uint256 indexed requestId, address indexed vault, uint256 threatScore, bool alarm);
     event CircuitBreakerTripped(address indexed vault, string reason);
     event CircuitBreakerReset(address indexed vault);
     event OwnershipTransferStarted(address indexed from, address indexed to);
@@ -250,7 +274,7 @@ contract HajarGuardian {
             llmAgentId, address(this), this.handleResponse.selector, payload
         );
         pending[requestId] =
-            PendingContext({vault: vault, user: user, amount: amount, tvl: tvl, active: true, isPrice: false});
+            PendingContext({vault: vault, user: user, amount: amount, tvl: tvl, active: true, kind: Kind.Risk});
         emit EscalatedToAI(requestId, vault, user, amount);
         return requestId;
     }
@@ -298,8 +322,61 @@ contract HajarGuardian {
             jsonAgentId, address(this), this.handleResponse.selector, payload
         );
         pending[requestId] =
-            PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, isPrice: true});
+            PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, kind: Kind.Price});
         emit PriceChecked(requestId, vault);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+        SELF-UPDATING THREAT INTELLIGENCE (Parse Website agent) — Tier 2c
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Configure a protocol's threat-intel feed (a security/advisory page to learn from).
+    function setThreatFeed(
+        address vault,
+        string calldata url,
+        string calldata prompt,
+        uint8 threatThreshold,
+        uint8 confidenceThreshold,
+        uint8 numPages
+    ) external onlyProtocolAdmin(vault) {
+        threatFeeds[vault] =
+            ThreatFeed(true, url, prompt, threatThreshold, confidenceThreshold, numPages == 0 ? 1 : numPages);
+        emit ThreatFeedSet(vault, url);
+    }
+
+    /// @notice Scrape the protocol's security feed via the Parse Website agent and extract a
+    ///         0..100 threat score. A high score latches the breaker. Call on a schedule (cron)
+    ///         so the guardian continuously LEARNS about new exploits and stays up to date.
+    function requestThreatScan(address vault) external returns (uint256 requestId) {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.admin && msg.sender != p.monitor) revert NotProtocolAdmin();
+        ThreatFeed memory t = threatFeeds[vault];
+        if (!t.enabled) revert NotRegistered();
+
+        uint256 needed = platform.getRequestDeposit() + (parseCostPerValidator * subcommitteeSize);
+        if (address(this).balance < needed) {
+            emit EscalationSkipped(vault, address(this), "underfunded");
+            return 0;
+        }
+
+        bytes memory payload = abi.encodeWithSelector(
+            IParseWebsiteAgent.ExtractANumber.selector,
+            "threat_level",
+            "Active-exploit threat level for this DeFi protocol or pattern, 0=none 100=under attack",
+            uint256(0),
+            uint256(100),
+            t.prompt,
+            t.url,
+            true, // resolveUrl
+            t.numPages,
+            t.confidenceThreshold
+        );
+        requestId = platform.createRequest{value: needed}(
+            parseAgentId, address(this), this.handleResponse.selector, payload
+        );
+        pending[requestId] =
+            PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, kind: Kind.Threat});
+        emit ThreatScanned(requestId, vault);
     }
 
     /// @notice Proactive 24/7 autonomous monitoring for a protocol (admin/monitor-triggered).
@@ -344,7 +421,7 @@ contract HajarGuardian {
 
         uint256 value = sum / n;
 
-        if (ctx.isPrice) {
+        if (ctx.kind == Kind.Price) {
             // External price sanity: divergence from the protocol's reference price.
             PriceFeed memory f = priceFeeds[ctx.vault];
             uint256 ref = f.referencePrice;
@@ -355,6 +432,18 @@ contract HajarGuardian {
                 emit CircuitBreakerTripped(ctx.vault, "tier2b-oracle-divergence");
             }
             emit PriceVerdict(requestId, ctx.vault, value, ref, divBps, alarm);
+            return;
+        }
+
+        if (ctx.kind == Kind.Threat) {
+            // Self-updating threat intel: a high scraped threat score latches the breaker.
+            uint256 threat = value > 100 ? 100 : value;
+            bool alarm = threat >= threatFeeds[ctx.vault].threatThreshold;
+            if (alarm) {
+                protocols[ctx.vault].paused = true;
+                emit CircuitBreakerTripped(ctx.vault, "tier2c-threat-intel");
+            }
+            emit ThreatVerdict(requestId, ctx.vault, threat, alarm);
             return;
         }
 
