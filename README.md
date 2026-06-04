@@ -110,14 +110,14 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| HajarGuardian v2 (multi-tenant, all agents) | `0x42245cEef96D432c8DA3918dc66D3663E36bFE72` | [view](https://shannon-explorer.somnia.network/address/0x42245cEef96D432c8DA3918dc66D3663E36bFE72) |
+| HajarGuardian v3 (multi-tenant, all agents + remediation) | `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c` | [view](https://shannon-explorer.somnia.network/address/0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c) |
 | ProtectedVault | `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39` | [view](https://shannon-explorer.somnia.network/address/0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39) |
 | HajarReactiveSubscriber (real Tier-3) | `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` | [view](https://shannon-explorer.somnia.network/address/0x9857aF25fFa558C382AbB916803Ee441502b0F8D) |
 | Somnia Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
 
-> The Tier-3 subscriber is bound (immutable) to the prior guardian `0x6BA6…a2f8`, where Tier-3
-> was first proven live; guardian **v2** (`0x4224…FE72`) adds the price-oracle + threat-intel
-> agents and is what the frontend reads today.
+> The Tier-3 subscriber is bound (immutable) to the original guardian `0x6BA6…a2f8`, where Tier-3
+> was first proven live; guardian **v3** (`0x5445…bc9c`) adds the price-oracle, threat-intel, and
+> autonomous-remediation agents and is what the frontend reads today.
 
 **Verified live on testnet (all tiers, real — no mocks):**
 - **Tier 1** — a hard-block reverts an 80%-of-TVL withdrawal same-block.
@@ -134,6 +134,15 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
   non-`Success` status — see `DISCORD_QUESTION.md`); Hajar **fails safe** (it emits a verdict and
   never latches on a failed scrape). This is exactly why Tier-2c ships **two sources** — the
   reliable JSON API path backs up the experimental scrape.
+- **Tier 2d (autonomous remediation) — verified live.** `requestAutonomousRemediation` sent a real
+  `inferToolsChat` request offering the agent a `pause()` tool; the validator subcommittee reached
+  **consensus** (`finishReason = "stop"`) and the LLM's on-chain reasoning was: *"The DeFi protocol
+  0x237a… appears to be operating normally. There is no indication of an active exploit or drain…
+  No action required."* The agent correctly **declined to act** on a healthy vault, so the breaker
+  stayed active (`RemediationVerdict`, `acted = false`). The agent-first loop — AI given a tool,
+  reasons, and decides whether to take on-chain action — works end-to-end. The live response also
+  **confirmed the return-tuple format** (leading `finishReason` string), so the callback decoder is
+  validated against real platform bytes.
 - **Tier 3 (genuinely validator-triggered)** — `HajarReactiveSubscriber` registered a real
   on-chain Reactivity subscription (id `4542758`) via precompile `0x0100`. A withdrawal emitted
   `Withdrawn`; ~20 blocks later **validators auto-invoked** `onEvent` in a separate execution
@@ -164,10 +173,11 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
   the `onchainTools` tuple (`struct OnchainTool { string signature; string description; }`) and the
   canonical selector `0xd0683905` (locked by `test_InferToolsChat_SelectorMatchesLiveABI`).
   `requestAutonomousRemediation` offers the LLM one safe tool (`pause()`) and latches on a tool
-  call. The request-side encoding is correct and ready; the exact on-chain delivery format of the
-  return tuple in `Response[].result` is still to be confirmed against a live sample, so the
-  callback decodes only the leading `finishReason` (fail-closed, inside try/catch). See
-  `DISCORD_QUESTION.md`.
+  call. **Verified live** (guardian v3): a real `inferToolsChat` reached validator consensus and
+  the return-tuple format (leading `finishReason` string) was confirmed against on-chain bytes;
+  the callback decodes `finishReason` fail-closed inside a try/catch and acts only on
+  `"tool_calls"`. Decoding the full `pendingToolCalls` array (for executing multi-tool flows) is
+  the remaining extension. See `DISCORD_QUESTION.md`.
 
 ## Somnia deploy gotchas (learned the hard way)
 
@@ -187,11 +197,12 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] `ISomniaAgents` reconciled to the live ABI; real agent ids wired
 - [x] **32 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation, tools-chat remediation)
-- [x] Tier-2d autonomous remediation (`inferToolsChat`) — selector `0xd0683905` confirmed + locked by test
+- [x] Tier-2d autonomous remediation (`inferToolsChat`) — **deployed + verified live** (selector
+      `0xd0683905` test-locked; consensus reached; AI declined to act on a healthy vault)
 - [x] All tiers deployed + live-verified on Somnia testnet (real validator consensus):
       Tier-1 (block), Tier-2 LLM (score 0, 2 validators), Tier-2b price oracle, Tier-2c JSON
       threat, Tier-3 reactivity
 - [x] Interactive frontend dashboard live on Vercel
 - [ ] Demo video (2–5 min)
-- [ ] Confirm the tools-chat callback tuple format against a live response sample, then decode
-      `pendingToolCalls` fully (request-side + selector already done)
+- [ ] Decode the full `pendingToolCalls` array for multi-tool execution flows (request-side,
+      selector, finishReason decode, and live consensus already confirmed)

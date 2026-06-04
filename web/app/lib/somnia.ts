@@ -24,8 +24,9 @@ export const client = createPublicClient({
 });
 
 export const ADDRESSES = {
-  // Guardian v2 — adds Tier-2b price oracle + Tier-2c threat intel (JSON API + Parse Website).
-  guardian: "0x42245cEef96D432c8DA3918dc66D3663E36bFE72",
+  // Guardian v3 — adds Tier-2d autonomous remediation (inferToolsChat, live-verified)
+  // on top of v2's Tier-2b price oracle + Tier-2c threat intel.
+  guardian: "0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c",
   vault: "0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39",
   monitor: "0x9857aF25fFa558C382AbB916803Ee441502b0F8D", // real reactivity subscriber (Tier-3)
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
