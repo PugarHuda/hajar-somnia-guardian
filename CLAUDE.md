@@ -66,8 +66,11 @@ still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) �
 - HajarGuardian v2 `0x42245cEef96D432c8DA3918dc66D3663E36bFE72` — v2 added Tier-2b/2c; live-verified
   LLM AIVerdict (score 0, 2 validators), PriceVerdict (EUR 0.861, 641bps), JSON ThreatVerdict (1).
   Superseded by v3.
-- HajarGuardian v1 `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8` (Tier-1/2/3 first proven) — the
-  Tier-3 reactive subscriber is immutably bound to this one.
+- HajarGuardian v1 `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8` (Tier-1/2/3 first proven).
+- **Tier-3 subscriber for v3:** `0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502` (subscriptionId 4638272,
+  33 STT). setMonitor(vault, sub) done on v3. LIVE-VERIFIED: withdrawal 0.01 → ReactiveForwarded
+  ~25 blocks later (validator-triggered, no keeper), no false latch. ALL tiers now live on v3.
+  (Old subscriber 0x9857 was bound to v1.)
 - ProtectedVault `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39`
 - HajarReactiveSubscriber (real Tier-3) `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` (subscriptionId 4542758)
 - LLM agentId `12847293847561029384`. Tier-2 AI verified live (scores 0 and 10, real validator consensus).

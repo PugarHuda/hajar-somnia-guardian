@@ -114,12 +114,12 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
 |----------|---------|----------|
 | HajarGuardian v3 (multi-tenant, all agents + remediation) | `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c` | [view](https://shannon-explorer.somnia.network/address/0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c) |
 | ProtectedVault | `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39` | [view](https://shannon-explorer.somnia.network/address/0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39) |
-| HajarReactiveSubscriber (real Tier-3) | `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` | [view](https://shannon-explorer.somnia.network/address/0x9857aF25fFa558C382AbB916803Ee441502b0F8D) |
+| HajarReactiveSubscriber (real Tier-3, bound to v3) | `0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502` | [view](https://shannon-explorer.somnia.network/address/0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502) |
 | Somnia Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
 
-> The Tier-3 subscriber is bound (immutable) to the original guardian `0x6BA6…a2f8`, where Tier-3
-> was first proven live; guardian **v3** (`0x5445…bc9c`) adds the price-oracle, threat-intel, and
-> autonomous-remediation agents and is what the frontend reads today.
+> **All tiers now live on the single guardian v3** (`0x5445…bc9c`). The Tier-3 subscriber
+> (`0x5aE1…D502`, subscription id `4638272`) is bound to v3 and **verified live**: a withdrawal
+> auto-fired its `onEvent` ~25 blocks later (`ReactiveForwarded`), validator-triggered, no keeper.
 
 **Verified live on testnet (all tiers, real — no mocks):**
 - **Tier 1** — a hard-block reverts an 80%-of-TVL withdrawal same-block.
