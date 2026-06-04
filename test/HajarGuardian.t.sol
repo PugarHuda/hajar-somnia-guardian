@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {HajarGuardian} from "../src/HajarGuardian.sol";
 import {ProtectedVault} from "../src/ProtectedVault.sol";
-import {MockAgentPlatform} from "../src/mocks/MockAgentPlatform.sol";
+import {MockAgentPlatform} from "./mocks/MockAgentPlatform.sol";
 import {HajarReactiveMonitor} from "../src/HajarReactiveMonitor.sol";
 import {Exploiter} from "../src/demo/Exploiter.sol";
 import {Response, Request, ResponseStatus} from "../src/interfaces/ISomniaAgents.sol";

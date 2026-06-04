@@ -8,7 +8,7 @@ import {
     Request,
     ResponseStatus,
     ConsensusType
-} from "../interfaces/ISomniaAgents.sol";
+} from "../../src/interfaces/ISomniaAgents.sol";
 
 /// @title MockAgentPlatform
 /// @notice Local stand-in for the Somnia Agents platform so the full async flow can be
