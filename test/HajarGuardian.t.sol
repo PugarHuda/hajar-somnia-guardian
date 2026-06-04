@@ -200,5 +200,21 @@ contract HajarGuardianTest is Test {
         assertEq(address(0xCAFE).balance, 5 ether);
     }
 
+    /// Price oracle (JSON API agent): market price diverging from reference latches the breaker.
+    function test_PriceOracle_DivergenceTrips() public {
+        guardian.setPriceFeed(address(vault), "https://api.x/eth", "ethereum.usd", 0, 2000, 1000); // ref 2000, max 10%
+        uint256 reqId = guardian.requestPriceCheck(address(vault));
+        platform.fulfillNumber(reqId, 1500, 3); // market 1500 vs ref 2000 = 25% divergence
+        assertTrue(guardian.paused(address(vault)), "oracle divergence should latch breaker");
+    }
+
+    /// Price within tolerance does not trip.
+    function test_PriceOracle_InRange_NoTrip() public {
+        guardian.setPriceFeed(address(vault), "https://api.x/eth", "ethereum.usd", 0, 2000, 1000);
+        uint256 reqId = guardian.requestPriceCheck(address(vault));
+        platform.fulfillNumber(reqId, 2050, 3); // 2.5% divergence < 10%
+        assertFalse(guardian.paused(address(vault)));
+    }
+
     receive() external payable {}
 }

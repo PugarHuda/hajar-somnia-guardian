@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {
     IAgentRequester,
     ILLMInferenceAgent,
+    IJsonApiAgent,
     Response,
     Request,
     ResponseStatus
@@ -35,8 +36,10 @@ contract HajarGuardian {
     address public pendingOwner; // two-step ownership transfer
 
     uint256 public llmAgentId; // 12847293847561029384
+    uint256 public jsonAgentId = 13174292974160097713; // JSON API Request agent (price oracle)
     uint256 public subcommitteeSize = 3;
-    uint256 public costPerValidator = 0.07 ether;
+    uint256 public costPerValidator = 0.07 ether; // LLM inference cost / validator
+    uint256 public jsonCostPerValidator = 0.03 ether; // JSON API cost / validator (verified live)
     uint256 public escalationCooldown = 60;
     uint256 public windowSeconds = 300;
 
@@ -72,9 +75,22 @@ contract HajarGuardian {
         uint256 amount;
         uint256 tvl;
         bool active;
+        bool isPrice; // true => JSON API price-feed response, false => LLM risk score
     }
 
     mapping(uint256 requestId => PendingContext) public pending;
+
+    /// @notice Optional external price-sanity feed per protocol (oracle-manipulation detection).
+    struct PriceFeed {
+        bool enabled;
+        string url; // public JSON endpoint
+        string selector; // json-path, e.g. "ethereum.usd"
+        uint8 decimals;
+        uint256 referencePrice; // the protocol's own/expected price to compare against
+        uint256 maxDivergenceBps; // alarm if |market - reference| exceeds this share
+    }
+
+    mapping(address vault => PriceFeed) public priceFeeds;
 
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
@@ -88,6 +104,9 @@ contract HajarGuardian {
     event EscalatedToAI(uint256 indexed requestId, address indexed vault, address user, uint256 amount);
     event EscalationSkipped(address indexed vault, address indexed user, string reason);
     event AIVerdict(uint256 indexed requestId, address indexed vault, uint256 riskScore, uint256 validatorCount, bool tripped);
+    event PriceFeedSet(address indexed vault, string url, string selector);
+    event PriceChecked(uint256 indexed requestId, address indexed vault);
+    event PriceVerdict(uint256 indexed requestId, address indexed vault, uint256 marketPrice, uint256 referencePrice, uint256 divergenceBps, bool alarm);
     event CircuitBreakerTripped(address indexed vault, string reason);
     event CircuitBreakerReset(address indexed vault);
     event OwnershipTransferStarted(address indexed from, address indexed to);
@@ -230,9 +249,57 @@ contract HajarGuardian {
         uint256 requestId = platform.createRequest{value: needed}(
             llmAgentId, address(this), this.handleResponse.selector, payload
         );
-        pending[requestId] = PendingContext({vault: vault, user: user, amount: amount, tvl: tvl, active: true});
+        pending[requestId] =
+            PendingContext({vault: vault, user: user, amount: amount, tvl: tvl, active: true, isPrice: false});
         emit EscalatedToAI(requestId, vault, user, amount);
         return requestId;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+            EXTERNAL PRICE ORACLE (JSON API agent) — Tier 2b
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Configure a protocol's external price-sanity feed.
+    function setPriceFeed(
+        address vault,
+        string calldata url,
+        string calldata selector,
+        uint8 decimals,
+        uint256 referencePrice,
+        uint256 maxDivergenceBps
+    ) external onlyProtocolAdmin(vault) {
+        priceFeeds[vault] =
+            PriceFeed(true, url, selector, decimals, referencePrice, maxDivergenceBps);
+        emit PriceFeedSet(vault, url, selector);
+    }
+
+    function setReferencePrice(address vault, uint256 referencePrice) external onlyProtocolAdmin(vault) {
+        priceFeeds[vault].referencePrice = referencePrice;
+    }
+
+    /// @notice Fetch the real market price via Somnia's JSON API agent and compare it to the
+    ///         protocol's reference price. A large divergence latches the breaker — catching
+    ///         oracle manipulation / depeg that the velocity & LLM tiers can't see.
+    function requestPriceCheck(address vault) external returns (uint256 requestId) {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.admin && msg.sender != p.monitor) revert NotProtocolAdmin();
+        PriceFeed memory f = priceFeeds[vault];
+        if (!f.enabled) revert NotRegistered();
+
+        uint256 needed = platform.getRequestDeposit() + (jsonCostPerValidator * subcommitteeSize);
+        if (address(this).balance < needed) {
+            emit EscalationSkipped(vault, address(this), "underfunded");
+            return 0;
+        }
+
+        bytes memory payload =
+            abi.encodeWithSelector(IJsonApiAgent.fetchUint.selector, f.url, f.selector, f.decimals);
+        requestId = platform.createRequest{value: needed}(
+            jsonAgentId, address(this), this.handleResponse.selector, payload
+        );
+        pending[requestId] =
+            PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, isPrice: true});
+        emit PriceChecked(requestId, vault);
     }
 
     /// @notice Proactive 24/7 autonomous monitoring for a protocol (admin/monitor-triggered).
@@ -265,8 +332,7 @@ contract HajarGuardian {
         for (uint256 i = 0; i < responses.length; i++) {
             if (responses[i].status == ResponseStatus.Success && responses[i].result.length == 32) {
                 int256 v = abi.decode(responses[i].result, (int256));
-                if (v < 0) v = 0;
-                if (v > 100) v = 100;
+                if (v < 0) v = 0; // never underflow; upper-clamp (risk 0..100) is applied below
                 sum += uint256(v);
                 n++;
             }
@@ -276,13 +342,33 @@ contract HajarGuardian {
             return;
         }
 
-        uint256 riskScore = sum / n;
-        bool tripped = riskScore >= protocols[ctx.vault].risk;
+        uint256 value = sum / n;
+
+        if (ctx.isPrice) {
+            // External price sanity: divergence from the protocol's reference price.
+            PriceFeed memory f = priceFeeds[ctx.vault];
+            uint256 ref = f.referencePrice;
+            uint256 divBps = ref == 0 ? 0 : (_absDiff(value, ref) * 10_000) / ref;
+            bool alarm = ref != 0 && divBps >= f.maxDivergenceBps;
+            if (alarm) {
+                protocols[ctx.vault].paused = true;
+                emit CircuitBreakerTripped(ctx.vault, "tier2b-oracle-divergence");
+            }
+            emit PriceVerdict(requestId, ctx.vault, value, ref, divBps, alarm);
+            return;
+        }
+
+        uint256 score = value > 100 ? 100 : value; // risk scores are clamped to 0..100
+        bool tripped = score >= protocols[ctx.vault].risk;
         if (tripped) {
             protocols[ctx.vault].paused = true;
             emit CircuitBreakerTripped(ctx.vault, "tier2-ai-judgment");
         }
-        emit AIVerdict(requestId, ctx.vault, riskScore, n, tripped);
+        emit AIVerdict(requestId, ctx.vault, score, n, tripped);
+    }
+
+    function _absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a - b : b - a;
     }
 
     string internal constant SYSTEM_PROMPT =
