@@ -81,6 +81,32 @@ export const guardianAbi = [
     { type: "address", name: "vault", indexed: true },
     { type: "string", name: "reason", indexed: false }] },
   { type: "event", name: "CircuitBreakerReset", inputs: [{ type: "address", name: "vault", indexed: true }] },
+  { type: "event", name: "PriceChecked", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true }] },
+  { type: "event", name: "PriceVerdict", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true },
+    { type: "uint256", name: "marketPrice", indexed: false },
+    { type: "uint256", name: "referencePrice", indexed: false },
+    { type: "uint256", name: "divergenceBps", indexed: false },
+    { type: "bool", name: "alarm", indexed: false }] },
+  { type: "event", name: "ThreatScanned", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true }] },
+  { type: "event", name: "ThreatVerdict", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true },
+    { type: "uint256", name: "threatScore", indexed: false },
+    { type: "bool", name: "alarm", indexed: false }] },
+  { type: "event", name: "RemediationRequested", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true }] },
+  { type: "event", name: "RemediationVerdict", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true },
+    { type: "string", name: "finishReason", indexed: false },
+    { type: "bool", name: "acted", indexed: false }] },
 ] as const;
 
 export const vaultAbi = [

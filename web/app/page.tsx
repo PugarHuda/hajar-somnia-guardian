@@ -145,9 +145,13 @@ export default function Home() {
               latches the breaker. The verdict carries a receipt and N validator signatures — auditable on-chain.
             </p>
             <p className="subagents">
-              <strong>+ two more Somnia agents on the same callback path:</strong> a{" "}
-              <em>JSON API</em> price-oracle sanity check (catches oracle manipulation / depeg) and
-              a <em>Parse Website</em> self-updating threat-intel feed (learns about new exploits).
+              <strong>+ three more agent paths on the same consensus callback:</strong> a{" "}
+              <em>JSON API</em> price-oracle sanity check (oracle-manipulation / depeg), a{" "}
+              <em>Parse Website</em> self-updating threat-intel feed (learns new exploits), and{" "}
+              <strong>Tier-2d autonomous remediation</strong> — the LLM is given a{" "}
+              <code>pause()</code> tool via <em>inferToolsChat</em> and <em>decides whether to act</em>,
+              not just score. Verified live: the agent reasoned on-chain and correctly declined to
+              pause a healthy vault.
             </p>
           </div>
         </div>

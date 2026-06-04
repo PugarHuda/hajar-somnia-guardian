@@ -222,8 +222,14 @@ function describe(name: string, a: any): string {
       case "Withdrawn": return `${short(a.user)} withdrew ${fmt(a.amount)} STT`;
       case "WithdrawalBlocked": return `blocked ${short(a.user)} (${a.reason})`;
       case "HardBlock": return `Tier-1 blocked ${short(a.user)} — ${Number(a.bps) / 100}% of TVL`;
-      case "EscalatedToAI": return `escalated to Somnia AI (req ${a.requestId})`;
-      case "AIVerdict": return `AI score ${a.riskScore} from ${a.validatorCount} validators${a.tripped ? " → TRIPPED" : ""}`;
+      case "EscalatedToAI": return `escalated to Somnia LLM (req ${a.requestId})`;
+      case "AIVerdict": return `LLM risk ${a.riskScore} from ${a.validatorCount} validators${a.tripped ? " → TRIPPED" : ""}`;
+      case "PriceChecked": return `Tier-2b price check sent → JSON API agent (req ${a.requestId})`;
+      case "PriceVerdict": return `price oracle: market ${a.marketPrice} vs ref ${a.referencePrice} · ${Number(a.divergenceBps) / 100}% divergence${a.alarm ? " → ALARM" : ""}`;
+      case "ThreatScanned": return `Tier-2c threat scan sent → Somnia agent (req ${a.requestId})`;
+      case "ThreatVerdict": return `threat intel: score ${a.threatScore}${a.alarm ? " → ALARM" : ""}`;
+      case "RemediationRequested": return `Tier-2d autonomous remediation sent → LLM tools-chat (req ${a.requestId})`;
+      case "RemediationVerdict": return `AI remediation: finishReason "${a.finishReason || "stop"}"${a.acted ? " → AI PAUSED protocol" : " → AI judged safe, no action"}`;
       case "CircuitBreakerTripped": return `breaker tripped (${a.reason})`;
       case "CircuitBreakerReset": return `breaker reset → ACTIVE`;
       default: return name;
@@ -236,6 +242,6 @@ const fmt = (w: bigint) => Number(formatEther(w)).toFixed(3);
 function badgeKind(name: string): string {
   if (name.includes("Block") || name.includes("Tripped")) return "red";
   if (name.includes("Reset") || name === "Deposited") return "green";
-  if (name.includes("AI") || name.includes("Escalated")) return "cyan";
+  if (name.includes("AI") || name.includes("Escalated") || name.includes("Price") || name.includes("Threat") || name.includes("Remediation")) return "cyan";
   return "gray";
 }
