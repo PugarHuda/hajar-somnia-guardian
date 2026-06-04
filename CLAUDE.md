@@ -52,7 +52,13 @@ still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) �
 `DISCORD_QUESTION.md`; don't guess that selector.
 
 ## Deployed (Somnia testnet — multi-tenant, all tiers live, no mocks)
-- HajarGuardian (multi-tenant) `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8`
+- **HajarGuardian v2 (current, all agents)** `0x42245cEef96D432c8DA3918dc66D3663E36bFE72` —
+  adds Tier-2b price oracle + Tier-2c threat intel. Live-verified 4 Jun 2026: LLM AIVerdict
+  (score 0, 2 validators), PriceVerdict (EUR 0.861 fetched, 641bps div, no alarm), JSON
+  ThreatVerdict (1, no alarm). Parse-Website scrape returned non-Success (validators diverge) →
+  fails safe. Frontend points here.
+- HajarGuardian v1 (Tier-1/2/3 first proven) `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8`
+  — the Tier-3 subscriber is immutably bound to this one.
 - ProtectedVault `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39`
 - HajarReactiveSubscriber (real Tier-3) `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` (subscriptionId 4542758)
 - LLM agentId `12847293847561029384`. Tier-2 AI verified live (scores 0 and 10, real validator consensus).

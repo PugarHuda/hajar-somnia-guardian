@@ -13,6 +13,8 @@ type State = {
   greyBps: bigint;
   risk: bigint;
   agentId: bigint;
+  jsonId: bigint;
+  parseId: bigint;
 };
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -26,10 +28,12 @@ export default function Home() {
     try {
       const g = { address: ADDRESSES.guardian as `0x${string}`, abi: guardianAbi };
       const vaultArg = [ADDRESSES.vault as `0x${string}`] as const;
-      const [paused, proto, agentId, tvl] = await Promise.all([
+      const [paused, proto, agentId, jsonId, parseId, tvl] = await Promise.all([
         client.readContract({ ...g, functionName: "paused", args: vaultArg }),
         client.readContract({ ...g, functionName: "protocols", args: vaultArg }),
         client.readContract({ ...g, functionName: "llmAgentId" }),
+        client.readContract({ ...g, functionName: "jsonAgentId" }),
+        client.readContract({ ...g, functionName: "parseAgentId" }),
         client.readContract({
           address: ADDRESSES.vault as `0x${string}`,
           abi: vaultAbi,
@@ -39,7 +43,7 @@ export default function Home() {
       const p = proto as unknown as {
         hardBps: bigint; rapidBps: bigint; greyBps: bigint; risk: bigint;
       };
-      setS({ paused: paused as boolean, hardBps: p.hardBps, rapidBps: p.rapidBps, greyBps: p.greyBps, risk: p.risk, agentId: agentId as bigint, tvl: tvl as bigint });
+      setS({ paused: paused as boolean, hardBps: p.hardBps, rapidBps: p.rapidBps, greyBps: p.greyBps, risk: p.risk, agentId: agentId as bigint, jsonId: jsonId as bigint, parseId: parseId as bigint, tvl: tvl as bigint });
       setErr(null);
       setAt(new Date().toLocaleTimeString());
     } catch (e: any) {
@@ -96,8 +100,15 @@ export default function Home() {
           <div className="value">{s ? `${formatEther(s.tvl)} STT` : "—"}</div>
         </div>
         <div className="card">
-          <div className="label">AI agent id</div>
-          <div className="value">{s ? (s.agentId === BigInt(0) ? "unset" : s.agentId.toString()) : "—"}</div>
+          <div className="label">Somnia AI agents</div>
+          <div className="value">
+            {s ? (
+              <span title={`LLM ${s.agentId} · JSON ${s.jsonId} · Parse ${s.parseId}`}>
+                3 wired
+                <span style={{ fontSize: 12, color: "var(--muted)", marginLeft: 6 }}>LLM · JSON · Parse</span>
+              </span>
+            ) : "—"}
+          </div>
         </div>
       </div>
       {err && (

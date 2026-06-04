@@ -24,9 +24,10 @@ export const client = createPublicClient({
 });
 
 export const ADDRESSES = {
-  guardian: "0x6BA6c7c52413A592F7799288CbC42d187ddda2f8",
+  // Guardian v2 — adds Tier-2b price oracle + Tier-2c threat intel (JSON API + Parse Website).
+  guardian: "0x42245cEef96D432c8DA3918dc66D3663E36bFE72",
   vault: "0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39",
-  monitor: "0x9857aF25fFa558C382AbB916803Ee441502b0F8D", // real reactivity subscriber
+  monitor: "0x9857aF25fFa558C382AbB916803Ee441502b0F8D", // real reactivity subscriber (Tier-3)
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
@@ -43,6 +44,8 @@ export const guardianAbi = [
   { type: "function", name: "paused", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { type: "function", name: "llmAgentId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "jsonAgentId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "parseAgentId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   {
     type: "function", name: "protocols", stateMutability: "view", inputs: [{ type: "address" }],
     outputs: [

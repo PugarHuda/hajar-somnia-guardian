@@ -109,21 +109,30 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| HajarGuardian (multi-tenant) | `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8` | [view](https://shannon-explorer.somnia.network/address/0x6BA6c7c52413A592F7799288CbC42d187ddda2f8) |
+| HajarGuardian v2 (multi-tenant, all agents) | `0x42245cEef96D432c8DA3918dc66D3663E36bFE72` | [view](https://shannon-explorer.somnia.network/address/0x42245cEef96D432c8DA3918dc66D3663E36bFE72) |
 | ProtectedVault | `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39` | [view](https://shannon-explorer.somnia.network/address/0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39) |
 | HajarReactiveSubscriber (real Tier-3) | `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` | [view](https://shannon-explorer.somnia.network/address/0x9857aF25fFa558C382AbB916803Ee441502b0F8D) |
 | Somnia Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
+
+> The Tier-3 subscriber is bound (immutable) to the prior guardian `0x6BA6…a2f8`, where Tier-3
+> was first proven live; guardian **v2** (`0x4224…FE72`) adds the price-oracle + threat-intel
+> agents and is what the frontend reads today.
 
 **Verified live on testnet (all tiers, real — no mocks):**
 - **Tier 1** — a hard-block reverts an 80%-of-TVL withdrawal same-block.
 - **Tier 2 (the differentiator)** — real requests to the Somnia Agents platform; a 3-validator
   subcommittee ran Qwen3-30B inference and consensus `AIVerdict`s were delivered on-chain
   (proactive check → score 0; 30% withdrawal → score 10).
-- **Tier 2b / 2c** — JSON API (`fetchUint`) and Parse Website (`ExtractANumber`) agents are
-  implemented and unit-tested (see `test/`), sharing the same consensus callback path as Tier-2.
-  ⚠️ They live in a build **newer than the currently-deployed guardian** (`0x6BA6…`), so they are
-  not yet callable on-chain — a redeploy of the guardian wires them live. Tier-2 LLM Inference is
-  the path that is fully verified live today.
+- **Tier 2b (JSON API price oracle) — verified live.** `requestPriceCheck` fetched a real FX
+  rate (USD→EUR `0.8610`) via validator consensus, computed a `641 bps` divergence from the
+  reference on-chain, and emitted `PriceVerdict` (no false alarm). Real `fetchUint`, real
+  consensus.
+- **Tier 2c (threat intel) — JSON-API source verified live** (`requestThreatScanJson` →
+  `ThreatVerdict`, score `1`, no alarm). The **Parse-Website** source (`ExtractANumber`) is
+  implemented but the Somnia validators' web-scrape consensus is unreliable today (it returned a
+  non-`Success` status — see `DISCORD_QUESTION.md`); Hajar **fails safe** (it emits a verdict and
+  never latches on a failed scrape). This is exactly why Tier-2c ships **two sources** — the
+  reliable JSON API path backs up the experimental scrape.
 - **Tier 3 (genuinely validator-triggered)** — `HajarReactiveSubscriber` registered a real
   on-chain Reactivity subscription (id `4542758`) via precompile `0x0100`. A withdrawal emitted
   `Withdrawn`; ~20 blocks later **validators auto-invoked** `onEvent` in a separate execution
@@ -166,14 +175,16 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 ## Status
 
 - [x] Multi-tenant three-tier guardian (sync hard rule + velocity, async AI, reactivity latch)
-- [x] Tier-2b external price-oracle sanity check (JSON API agent) — implemented + unit-tested
-- [x] Tier-2c self-updating threat intelligence (Parse Website + JSON API agents) — implemented + unit-tested
+- [x] Tier-2b external price-oracle sanity check (JSON API agent) — **deployed + verified live**
+- [x] Tier-2c self-updating threat intelligence — JSON API source **deployed + verified live**;
+      Parse-Website source implemented (validator scrape-consensus flaky, fails safe)
 - [x] Proactive autonomous monitoring (`requestRiskCheck`) for 24/7 AI health checks
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] `ISomniaAgents` reconciled to the live ABI; real agent ids wired
 - [x] **28 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation)
-- [x] Tiers 1, 2 (LLM), and 3 deployed + live-verified on Somnia testnet (real validator consensus)
-- [ ] Redeploy the guardian to wire Tier-2b/2c (JSON API price + Parse Website threat) live on-chain
+- [x] All tiers deployed + live-verified on Somnia testnet (real validator consensus):
+      Tier-1 (block), Tier-2 LLM (score 0, 2 validators), Tier-2b price oracle, Tier-2c JSON
+      threat, Tier-3 reactivity
 - [x] Interactive frontend dashboard live on Vercel
 - [ ] Demo video (2–5 min)
 - [ ] (roadmap) `inferToolsChat` agent that emits remediation calldata — pending the
