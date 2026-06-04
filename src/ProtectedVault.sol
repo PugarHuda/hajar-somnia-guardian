@@ -13,7 +13,8 @@ interface IGuardian {
         external
         returns (bool allowed);
 
-    function paused() external view returns (bool);
+    /// @param vault the protocol whose breaker state to read (multi-tenant guardian).
+    function paused(address vault) external view returns (bool);
 }
 
 contract ProtectedVault {
@@ -59,7 +60,7 @@ contract ProtectedVault {
         if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
 
         // Hard global pause (set by guardian's circuit breaker).
-        if (address(guardian) != address(0) && guardian.paused()) {
+        if (address(guardian) != address(0) && guardian.paused(address(this))) {
             emit WithdrawalBlocked(msg.sender, amount, "paused");
             revert ProtocolPaused();
         }

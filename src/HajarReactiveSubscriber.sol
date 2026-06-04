@@ -5,7 +5,7 @@ import {SomniaEventHandler} from "@somnia-chain/reactivity-contracts/contracts/S
 import {SomniaExtensions} from "@somnia-chain/reactivity-contracts/contracts/interfaces/SomniaExtensions.sol";
 
 interface IHajarGuardianSignal {
-    function onReactiveSignal(address user, uint256 amount, uint256 tvlBefore) external;
+    function onReactiveSignal(address vault, address user, uint256 amount, uint256 tvlBefore) external;
 }
 
 interface IVaultView {
@@ -68,7 +68,7 @@ contract HajarReactiveSubscriber is SomniaEventHandler {
         // TVL after the withdrawal; reconstruct the pre-withdrawal TVL for the guardian's rule.
         uint256 tvlAfter = IVaultView(vault).totalAssets();
         uint256 tvlBefore = tvlAfter + amount;
-        guardian.onReactiveSignal(user, amount, tvlBefore);
+        guardian.onReactiveSignal(vault, user, amount, tvlBefore);
         emit ReactiveForwarded(user, amount, tvlBefore);
     }
 
@@ -80,6 +80,13 @@ contract HajarReactiveSubscriber is SomniaEventHandler {
 
     /// @notice Top up the subscription owner balance (covers callback gas).
     function fund() external payable {}
+
+    /// @notice Recover STT (e.g. after unsubscribe). Owner only.
+    function withdraw(uint256 amount) external {
+        if (msg.sender != owner) revert NotOwner();
+        (bool ok,) = owner.call{value: amount}("");
+        require(ok, "withdraw failed");
+    }
 
     receive() external payable {}
 }

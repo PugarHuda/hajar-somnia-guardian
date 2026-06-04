@@ -14,94 +14,106 @@ interface IVaultTVL {
 }
 
 /// @title HajarGuardian
-/// @notice A two-tier autonomous security layer for DeFi protocols on Somnia.
+/// @notice A multi-tenant, three-tier autonomous security layer for DeFi protocols on Somnia.
+///         ANY protocol can `registerProtocol()` its vault and instantly get exploit protection
+///         ("Hajar-as-a-Service"). Each protocol has its own admin, thresholds, and circuit
+///         breaker.
 ///
-///         Tier 1 (hot path, deterministic, same-block): hard rules run
-///         synchronously inside the protected protocol's withdraw() call. A blatant
-///         drain is blocked instantly — no AI, no waiting.
-///
-///         Tier 2 (warm path, AI, async): ambiguous "grey zone" activity is escalated
-///         to Somnia's LLM Inference agent. Validators run the model deterministically
-///         and reach consensus; the result returns via handleResponse(). If the agent
-///         judges the activity malicious, Hajar trips the circuit breaker so that
-///         subsequent withdrawals are paused.
-///
-/// @dev    Why this split? Agent calls on Somnia are asynchronous (request now,
-///         callback later). You therefore CANNOT block an in-flight tx on an AI verdict.
-///         Tier 1 is what actually prevents the worst case in real time; Tier 2 adds
-///         nuanced, consensus-verified judgment for everything Tier 1 can't cleanly call.
+///         Tier 1 (sync, same-block): deterministic hard rules (single-tx drain + velocity)
+///                 revert blatant attacks instantly.
+///         Tier 2 (async, AI): grey-zone activity is escalated to Somnia's LLM Inference agent;
+///                 validators reach consensus on a 0–100 risk score that can latch the breaker.
+///         Tier 3 (event-driven): a real Somnia Reactivity subscription latches the breaker
+///                 in a separate, validator-triggered execution.
 contract HajarGuardian {
     /*//////////////////////////////////////////////////////////////
-                                CONFIG
+                          PLATFORM-LEVEL CONFIG
     //////////////////////////////////////////////////////////////*/
 
     IAgentRequester public immutable platform;
-    address public owner;
-    address public vault; // the protected protocol allowed to call checkWithdrawal
+    address public owner; // controls agent config + guardian STT (AI fees)
+    address public pendingOwner; // two-step ownership transfer
 
-    // LLM Inference agent (Qwen3-30B) — same id on testnet & mainnet.
-    uint256 public llmAgentId; // 12847293847561029384 from https://agents.somnia.network
+    uint256 public llmAgentId; // 12847293847561029384
     uint256 public subcommitteeSize = 3;
-    uint256 public costPerValidator = 0.07 ether; // STT per validator for LLM inference
+    uint256 public costPerValidator = 0.07 ether;
+    uint256 public escalationCooldown = 60;
+    uint256 public windowSeconds = 300;
 
-    // --- tunable policy knobs (basis points of TVL; 10_000 = 100%) ---
-    uint256 public hardWithdrawalBps = 4_000; // >=40% of TVL in ONE tx => instant block
-    uint256 public rapidDrainBps = 6_000; // >=60% by one user within window => instant block
-    uint256 public greyZoneBps = 1_500; // >=15% => allow but escalate to AI
-    uint256 public riskThreshold = 70; // AI score (0..100) at/above which we pause
-    uint256 public windowSeconds = 300; // velocity window for rapid-drain detection
+    /*//////////////////////////////////////////////////////////////
+                          PER-PROTOCOL STATE
+    //////////////////////////////////////////////////////////////*/
 
-    bool public paused;
-    mapping(address => bool) public whitelisted; // trusted addresses skip checks
-    address public reactiveMonitor; // authorized Somnia Reactivity handler (Tier 3)
+    struct Protocol {
+        bool registered;
+        bool paused;
+        address admin; // can configure / reset this protocol
+        address monitor; // authorized reactive subscriber (Tier 3)
+        uint256 hardBps; // single-tx drain limit
+        uint256 rapidBps; // velocity (windowed) drain limit
+        uint256 greyBps; // escalate-to-AI threshold
+        uint256 risk; // AI score that latches the breaker
+    }
 
-    // rolling-window velocity tracking per user
+    mapping(address vault => Protocol) public protocols;
+
     struct Window {
         uint64 start;
         uint192 cumAmount;
     }
 
-    mapping(address => Window) public windows;
+    mapping(address vault => mapping(address user => Window)) public windows;
+    mapping(address vault => mapping(address user => uint256)) public lastEscalation;
+    mapping(address vault => mapping(address user => bool)) public whitelisted;
 
-    // anti-griefing: rate-limit how often a user can trigger a (paid) AI escalation
-    uint256 public escalationCooldown = 60; // seconds between escalations per user
-    mapping(address => uint256) public lastEscalation;
-
-    // request bookkeeping for the async callback
     struct PendingContext {
+        address vault;
         address user;
         uint256 amount;
         uint256 tvl;
         bool active;
     }
 
-    mapping(uint256 => PendingContext) public pending;
+    mapping(uint256 requestId => PendingContext) public pending;
 
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    event HardBlock(address indexed user, uint256 amount, uint256 bps);
-    event EscalatedToAI(uint256 indexed requestId, address indexed user, uint256 amount);
-    event EscalationSkipped(address indexed user, string reason);
-    event AIVerdict(uint256 indexed requestId, uint256 riskScore, uint256 validatorCount, bool tripped);
-    event CircuitBreakerTripped(string reason);
-    event CircuitBreakerReset();
+    event ProtocolRegistered(address indexed vault, address indexed admin);
+    event ThresholdsUpdated(address indexed vault, uint256 hardBps, uint256 rapidBps, uint256 greyBps, uint256 risk);
+    event MonitorSet(address indexed vault, address indexed monitor);
+    event WhitelistSet(address indexed vault, address indexed who, bool ok);
+    event HardBlock(address indexed vault, address indexed user, uint256 bps);
+    event EscalatedToAI(uint256 indexed requestId, address indexed vault, address user, uint256 amount);
+    event EscalationSkipped(address indexed vault, address indexed user, string reason);
+    event AIVerdict(uint256 indexed requestId, address indexed vault, uint256 riskScore, uint256 validatorCount, bool tripped);
+    event CircuitBreakerTripped(address indexed vault, string reason);
+    event CircuitBreakerReset(address indexed vault);
+    event OwnershipTransferStarted(address indexed from, address indexed to);
     event OwnershipTransferred(address indexed from, address indexed to);
+    event Funded(address indexed from, uint256 amount);
 
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
     //////////////////////////////////////////////////////////////*/
 
     error NotOwner();
-    error NotVault();
-    error NotPlatform();
+    error NotProtocolAdmin();
     error NotMonitor();
+    error NotPlatform();
+    error NotRegistered();
+    error AlreadyRegistered();
     error UnknownRequest();
     error ZeroAddress();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyProtocolAdmin(address vault) {
+        if (msg.sender != protocols[vault].admin) revert NotProtocolAdmin();
         _;
     }
 
@@ -112,86 +124,73 @@ contract HajarGuardian {
     }
 
     /*//////////////////////////////////////////////////////////////
+                            REGISTRATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Register a protocol's vault for protection. Caller becomes its admin.
+    ///         Pass 0 for any threshold to use the sensible default.
+    function registerProtocol(address vault, uint256 hardBps, uint256 rapidBps, uint256 greyBps, uint256 risk)
+        external
+    {
+        Protocol storage p = protocols[vault];
+        if (p.registered) revert AlreadyRegistered();
+        p.registered = true;
+        p.admin = msg.sender;
+        p.hardBps = hardBps == 0 ? 4_000 : hardBps;
+        p.rapidBps = rapidBps == 0 ? 6_000 : rapidBps;
+        p.greyBps = greyBps == 0 ? 1_500 : greyBps;
+        p.risk = risk == 0 ? 70 : risk;
+        emit ProtocolRegistered(vault, msg.sender);
+        emit ThresholdsUpdated(vault, p.hardBps, p.rapidBps, p.greyBps, p.risk);
+    }
+
+    function paused(address vault) external view returns (bool) {
+        return protocols[vault].paused;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                           TIER 1 — SYNCHRONOUS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Called synchronously by the protected vault on every withdrawal.
-    /// @return allowed True if the withdrawal may proceed this block.
+    /// @notice Called synchronously by a registered vault on every withdrawal.
     function checkWithdrawal(address user, uint256 amount, uint256 tvlBefore)
         external
         returns (bool allowed)
     {
-        if (msg.sender != vault) revert NotVault();
-        if (whitelisted[user]) return true;
+        address vault = msg.sender;
+        Protocol storage p = protocols[vault];
+        if (!p.registered) revert NotRegistered();
+        if (whitelisted[vault][user]) return true;
         if (tvlBefore == 0) return true;
 
         uint256 bps = (amount * 10_000) / tvlBefore;
-        // velocity: record this withdrawal, then read cumulative share within the window.
-        // Only successful (non-reverted) withdrawals persist here, so blocked attempts
-        // never inflate the counter. Recording happens ONLY on this synchronous path so a
-        // later reactivity event for the same withdrawal cannot double-count it.
-        _record(user, amount);
-        uint256 windowBps = _windowBps(user, tvlBefore);
+        _record(vault, user, amount);
+        uint256 windowBps = _windowBps(vault, user, tvlBefore);
 
-        // --- Tier 1: deterministic hard rule (instant, same-block) ---
-        // We block the offending withdrawal by returning false (the vault reverts).
-        // We deliberately do NOT latch `paused` here: reverting the trigger tx would
-        // roll the latch back anyway, and the deterministic rule re-blocks every retry,
-        // so per-tx blocking already protects the funds. The global breaker is latched
-        // only via Tier 2 (async AI callback) or Tier 3 (reactivity monitor) — paths
-        // that run in a separate execution and therefore survive.
-        if (_isHardViolation(user, amount, tvlBefore, bps, windowBps)) {
-            emit HardBlock(user, amount, bps);
+        // Tier 1: deterministic block (per-tx; does not latch — see onReactiveSignal/handleResponse).
+        if (bps >= p.hardBps || windowBps >= p.rapidBps) {
+            emit HardBlock(vault, user, bps);
             return false;
         }
 
-        // --- Tier 2: grey zone => allow now, ask AI to judge (async) ---
-        if (bps >= greyZoneBps || windowBps >= greyZoneBps) {
-            _escalateToAI(user, amount, tvlBefore);
+        // Tier 2: grey zone -> escalate to AI (async, best-effort, never blocks).
+        if (bps >= p.greyBps || windowBps >= p.greyBps) {
+            _escalateToAI(vault, user, amount, tvlBefore, bps, windowBps);
         }
-
         return true;
     }
 
-    /// @notice THE policy brain. Returns true if this withdrawal is a blatant attack that
-    ///         must be stopped immediately, no AI needed.
-    /// @dev    This is the single most important design decision in Hajar — tune it to
-    ///         the protocol you protect. Too strict => false pauses (protocol unusable);
-    ///         too loose => an exploit drains funds before Tier 2's AI can react.
-    ///
-    ///         Lending/vault-aware defaults, two deterministic signals:
-    ///           1. Single-tx drain: one withdrawal taking >= hardWithdrawalBps of TVL.
-    ///           2. Rapid drain (velocity): one user pulling >= rapidDrainBps of TVL
-    ///              within `windowSeconds` — the classic loop/re-entry exploit shape.
-    /// @param bps        this withdrawal's share of TVL, in basis points.
-    /// @param windowBps  this user's cumulative share within the rolling window.
-    function _isHardViolation(
-        address, /* user */
-        uint256, /* amount */
-        uint256, /* tvlBefore */
-        uint256 bps,
-        uint256 windowBps
-    ) internal view returns (bool) {
-        if (bps >= hardWithdrawalBps) return true; // signal 1: single-tx drain
-        if (windowBps >= rapidDrainBps) return true; // signal 2: rapid/looped drain
-        return false;
-    }
-
-    /// @dev Records a withdrawal into the user's rolling velocity window (resets if expired).
-    function _record(address user, uint256 amount) internal {
-        Window storage w = windows[user];
+    function _record(address vault, address user, uint256 amount) internal {
+        Window storage w = windows[vault][user];
         if (block.timestamp > uint256(w.start) + windowSeconds) {
             w.start = uint64(block.timestamp);
             w.cumAmount = 0;
         }
-        // amounts are bounded by vault TVL; uint192 cannot realistically overflow here.
         w.cumAmount += uint192(amount);
     }
 
-    /// @dev Read-only: the user's cumulative withdrawal share of TVL within the window.
-    ///      Returns 0 if the window has expired (mirrors the reset in `_record`).
-    function _windowBps(address user, uint256 tvl) internal view returns (uint256) {
-        Window storage w = windows[user];
+    function _windowBps(address vault, address user, uint256 tvl) internal view returns (uint256) {
+        Window storage w = windows[vault][user];
         if (tvl == 0 || block.timestamp > uint256(w.start) + windowSeconds) return 0;
         return (uint256(w.cumAmount) * 10_000) / tvl;
     }
@@ -200,63 +199,51 @@ contract HajarGuardian {
                           TIER 2 — ASYNC (AI)
     //////////////////////////////////////////////////////////////*/
 
-    /// @dev Best-effort escalation. MUST NOT revert: it runs inside the user's withdrawal,
-    ///      so any revert here would block a legitimate withdrawal (availability DoS). If we
-    ///      can't escalate (underfunded or on cooldown) we skip and let Tier-3/owner cover it.
-    function _escalateToAI(address user, uint256 amount, uint256 tvl) internal returns (uint256) {
-        // anti-griefing: one paid escalation per user per cooldown window.
-        // (lastEscalation == 0 means "never escalated" — always allow the first one.)
-        if (lastEscalation[user] != 0 && block.timestamp < lastEscalation[user] + escalationCooldown) {
-            emit EscalationSkipped(user, "cooldown");
+    function _escalateToAI(
+        address vault,
+        address user,
+        uint256 amount,
+        uint256 tvl,
+        uint256 bps,
+        uint256 windowBps
+    ) internal returns (uint256) {
+        uint256 last = lastEscalation[vault][user];
+        if (last != 0 && block.timestamp < last + escalationCooldown) {
+            emit EscalationSkipped(vault, user, "cooldown");
             return 0;
         }
-
-        uint256 reserve = platform.getRequestDeposit();
-        uint256 reward = costPerValidator * subcommitteeSize;
-        uint256 needed = reserve + reward;
+        uint256 needed = platform.getRequestDeposit() + (costPerValidator * subcommitteeSize);
         if (address(this).balance < needed) {
-            emit EscalationSkipped(user, "underfunded");
-            return 0; // fail open — never block the withdrawal
+            emit EscalationSkipped(vault, user, "underfunded");
+            return 0; // fail open
         }
 
-        lastEscalation[user] = block.timestamp;
-        string memory prompt = _buildPrompt(user, amount, tvl);
-        // Live inferNumber ABI: (prompt, system, minValue, maxValue, chainOfThought) -> int256.
-        // chainOfThought=false keeps it deterministic & cheap for byte-identical consensus.
+        lastEscalation[vault][user] = block.timestamp;
         bytes memory payload = abi.encodeWithSelector(
             ILLMInferenceAgent.inferNumber.selector,
-            prompt,
+            _buildPrompt(user, amount, tvl, bps, windowBps),
             SYSTEM_PROMPT,
             int256(0),
             int256(100),
             false
         );
-
         uint256 requestId = platform.createRequest{value: needed}(
-            llmAgentId,
-            address(this),
-            this.handleResponse.selector,
-            payload
+            llmAgentId, address(this), this.handleResponse.selector, payload
         );
-
-        pending[requestId] = PendingContext({user: user, amount: amount, tvl: tvl, active: true});
-        emit EscalatedToAI(requestId, user, amount);
+        pending[requestId] = PendingContext({vault: vault, user: user, amount: amount, tvl: tvl, active: true});
+        emit EscalatedToAI(requestId, vault, user, amount);
         return requestId;
     }
 
-    /// @notice Proactive, continuous autonomous monitoring. A cron job, keeper, or Reactivity
-    ///         subscription calls this on a schedule so Hajar assesses protocol health via the
-    ///         Somnia AI agent EVEN WHEN no withdrawal is happening — 24/7 autonomy, not just
-    ///         reactive defence. A high consensus risk score latches the breaker.
-    /// @return requestId 0 if skipped (cooldown/underfunded), else the agent request id.
-    function requestRiskCheck() external returns (uint256 requestId) {
-        if (msg.sender != owner && msg.sender != reactiveMonitor) revert NotMonitor();
-        uint256 tvl = vault == address(0) ? 0 : IVaultTVL(vault).totalAssets();
-        // address(this) marks a protocol-wide (not per-user) assessment.
-        return _escalateToAI(address(this), 0, tvl);
+    /// @notice Proactive 24/7 autonomous monitoring for a protocol (admin/monitor-triggered).
+    function requestRiskCheck(address vault) external returns (uint256) {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.admin && msg.sender != p.monitor) revert NotProtocolAdmin();
+        uint256 tvl = IVaultTVL(vault).totalAssets();
+        uint256 windowBps = _windowBps(vault, address(this), tvl);
+        return _escalateToAI(vault, address(this), 0, tvl, 0, windowBps);
     }
 
-    /// @notice Async callback invoked by the Somnia platform with all validator responses.
     function handleResponse(
         uint256 requestId,
         Response[] calldata responses,
@@ -269,19 +256,14 @@ contract HajarGuardian {
         delete pending[requestId];
 
         if (status != ResponseStatus.Success || responses.length == 0) {
-            emit AIVerdict(requestId, 0, responses.length, false);
+            emit AIVerdict(requestId, ctx.vault, 0, responses.length, false);
             return;
         }
 
-        // Aggregate validator scores (consensus is already enforced by the platform;
-        // we average successful responses for a robust single number).
         uint256 sum;
         uint256 n;
         for (uint256 i = 0; i < responses.length; i++) {
-            // require exactly 32 bytes so a malformed validator result can't revert the
-            // whole callback (which would otherwise strand the request).
             if (responses[i].status == ResponseStatus.Success && responses[i].result.length == 32) {
-                // inferNumber returns int256, clamped to [0,100] by the agent.
                 int256 v = abi.decode(responses[i].result, (int256));
                 if (v < 0) v = 0;
                 if (v > 100) v = 100;
@@ -290,33 +272,40 @@ contract HajarGuardian {
             }
         }
         if (n == 0) {
-            emit AIVerdict(requestId, 0, 0, false);
+            emit AIVerdict(requestId, ctx.vault, 0, 0, false);
             return;
         }
 
         uint256 riskScore = sum / n;
-        bool tripped = riskScore >= riskThreshold;
+        bool tripped = riskScore >= protocols[ctx.vault].risk;
         if (tripped) {
-            paused = true;
-            emit CircuitBreakerTripped("tier2-ai-judgment");
+            protocols[ctx.vault].paused = true;
+            emit CircuitBreakerTripped(ctx.vault, "tier2-ai-judgment");
         }
-        emit AIVerdict(requestId, riskScore, n, tripped);
+        emit AIVerdict(requestId, ctx.vault, riskScore, n, tripped);
     }
 
-    /// @dev System role handed to the LLM agent (kept constant for deterministic consensus).
     string internal constant SYSTEM_PROMPT =
         "You are an autonomous DeFi security guardian. Given a withdrawal's context, rate how "
         "likely it is a malicious exploit on a scale of 0 (clearly safe) to 100 (certain attack). "
-        "Consider the share of TVL, velocity, and address behaviour. Reply with the integer only.";
+        "Weigh the single-tx share of TVL AND the cumulative velocity share: a high velocity share "
+        "signals a looping drain even when each tx is small. Reply with the integer only.";
 
-    /// @dev Builds the data-only context for the agent. Deterministic & information-dense.
-    function _buildPrompt(address user, uint256 amount, uint256 tvl) internal pure returns (string memory) {
+    function _buildPrompt(address user, uint256 amount, uint256 tvl, uint256 bps, uint256 windowBps)
+        internal
+        pure
+        returns (string memory)
+    {
         return string.concat(
-            "Withdrawal amount (wei): ",
+            "Withdrawal: ",
             _toString(amount),
-            ". Total value locked before (wei): ",
+            " wei (",
+            _toString(bps / 100),
+            "% of TVL). Cumulative velocity this user this window: ",
+            _toString(windowBps / 100),
+            "% of TVL. TVL before (wei): ",
             _toString(tvl),
-            ". User address: ",
+            ". User: ",
             _toHexString(user),
             "."
         );
@@ -326,65 +315,60 @@ contract HajarGuardian {
                        TIER 3 — REACTIVITY (event-driven)
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Latch-on-detection path, meant to be driven by a Somnia Reactivity
-    ///         subscription that fires on the vault's `Withdrawn` event. Because this runs
-    ///         in a SEPARATE (validator-triggered) execution — not inside the withdrawal tx —
-    ///         it CAN persistently latch the breaker, which Tier 1 cannot.
-    /// @dev    In production you register a subscription whose handler calls this. Here it is
-    ///         guarded to `reactiveMonitor` so it can also be driven by an off-chain keeper
-    ///         during the demo. Same deterministic rule as Tier 1, but it pauses globally.
-    function onReactiveSignal(address user, uint256 amount, uint256 tvlBefore) external {
-        if (msg.sender != reactiveMonitor) revert NotMonitor();
+    /// @notice Latch-on-detection, called by a protocol's authorized reactive subscriber in a
+    ///         separate (validator-triggered) execution — so it CAN persistently latch.
+    function onReactiveSignal(address vault, address user, uint256 amount, uint256 tvlBefore) external {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.monitor) revert NotMonitor();
         if (tvlBefore == 0) return;
 
-        // Read-only velocity: the withdrawal was already recorded by the synchronous
-        // checkWithdrawal path, so we must NOT record again here (avoids double-counting).
         uint256 bps = (amount * 10_000) / tvlBefore;
-        uint256 windowBps = _windowBps(user, tvlBefore);
-
-        if (_isHardViolation(user, amount, tvlBefore, bps, windowBps)) {
-            paused = true;
-            emit CircuitBreakerTripped("tier3-reactivity");
+        uint256 windowBps = _windowBps(vault, user, tvlBefore);
+        if (bps >= p.hardBps || windowBps >= p.rapidBps) {
+            p.paused = true;
+            emit CircuitBreakerTripped(vault, "tier3-reactivity");
         }
     }
 
     /*//////////////////////////////////////////////////////////////
-                                ADMIN
+                        PER-PROTOCOL ADMIN
     //////////////////////////////////////////////////////////////*/
 
-    function setVault(address v) external onlyOwner {
-        vault = v;
+    function setMonitor(address vault, address monitor) external onlyProtocolAdmin(vault) {
+        protocols[vault].monitor = monitor;
+        emit MonitorSet(vault, monitor);
     }
 
-    function setReactiveMonitor(address m) external onlyOwner {
-        reactiveMonitor = m;
-    }
-
-    function setThresholds(uint256 hardBps, uint256 rapidBps, uint256 greyBps, uint256 risk)
+    function setThresholds(address vault, uint256 hardBps, uint256 rapidBps, uint256 greyBps, uint256 risk)
         external
-        onlyOwner
+        onlyProtocolAdmin(vault)
     {
-        hardWithdrawalBps = hardBps;
-        rapidDrainBps = rapidBps;
-        greyZoneBps = greyBps;
-        riskThreshold = risk;
+        Protocol storage p = protocols[vault];
+        p.hardBps = hardBps;
+        p.rapidBps = rapidBps;
+        p.greyBps = greyBps;
+        p.risk = risk;
+        emit ThresholdsUpdated(vault, hardBps, rapidBps, greyBps, risk);
     }
 
-    function setWindow(uint256 secondsWindow) external onlyOwner {
-        windowSeconds = secondsWindow;
+    function setWhitelist(address vault, address who, bool ok) external onlyProtocolAdmin(vault) {
+        whitelisted[vault][who] = ok;
+        emit WhitelistSet(vault, who, ok);
     }
 
-    function setEscalationCooldown(uint256 secondsCooldown) external onlyOwner {
-        escalationCooldown = secondsCooldown;
+    function resetBreaker(address vault) external onlyProtocolAdmin(vault) {
+        protocols[vault].paused = false;
+        emit CircuitBreakerReset(vault);
     }
 
-    /// @notice Transfer ownership. Roadmap: replace with a multisig/timelock so a single key
-    ///         can't unilaterally pause the protocol or move guardian funds.
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+    function transferProtocolAdmin(address vault, address newAdmin) external onlyProtocolAdmin(vault) {
+        if (newAdmin == address(0)) revert ZeroAddress();
+        protocols[vault].admin = newAdmin;
     }
+
+    /*//////////////////////////////////////////////////////////////
+                        PLATFORM-LEVEL ADMIN
+    //////////////////////////////////////////////////////////////*/
 
     function setLlmAgentId(uint256 id) external onlyOwner {
         llmAgentId = id;
@@ -395,24 +379,37 @@ contract HajarGuardian {
         costPerValidator = costPerValidator_;
     }
 
-    function setWhitelist(address who, bool ok) external onlyOwner {
-        whitelisted[who] = ok;
+    function setEscalationCooldown(uint256 secondsCooldown) external onlyOwner {
+        escalationCooldown = secondsCooldown;
     }
 
-    function resetBreaker() external onlyOwner {
-        paused = false;
-        emit CircuitBreakerReset();
+    function setWindow(uint256 secondsWindow) external onlyOwner {
+        windowSeconds = secondsWindow;
     }
 
-    /// @notice Fund the guardian with STT so it can pay for AI escalations.
-    function fund() external payable {}
+    /// @notice Two-step ownership transfer (safer for a security product than single-step).
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotOwner();
+        emit OwnershipTransferred(owner, pendingOwner);
+        owner = pendingOwner;
+        pendingOwner = address(0);
+    }
+
+    function fund() external payable {
+        emit Funded(msg.sender, msg.value);
+    }
 
     function withdrawFunds(uint256 amount) external onlyOwner {
         (bool ok,) = owner.call{value: amount}("");
         require(ok, "withdraw failed");
     }
 
-    /// @dev Rebates from the platform are pushed back automatically — must accept them.
     receive() external payable {}
 
     /*//////////////////////////////////////////////////////////////
