@@ -107,6 +107,16 @@ export default function DemoConsole() {
     if (big === 0n) return note("err", "Vault TVL is 0 — deposit first.");
     send("Try Drain (80% TVL)", ADDRESSES.vault as Address, vaultAbi, "withdraw", [big]);
   };
+  // Grey-zone withdrawal (≈25% of TVL) sits between greyBps (15%) and hardBps (40%), so the
+  // guardian auto-escalates to the Somnia LLM agent — a fully PUBLIC way to trigger Tier-2 AI
+  // (no admin needed). Watch EscalatedToAI → AIVerdict stream into the feed below.
+  const doEscalate = async () => {
+    const tvl = await tvlNow();
+    const grey = (tvl * 25n) / 100n;
+    if (grey === 0n) return note("err", "Vault TVL is 0 — deposit first.");
+    note("info", "Grey-zone withdrawal → guardian escalates to Somnia AI (watch the feed)…");
+    send("Trigger AI (25% TVL)", ADDRESSES.vault as Address, vaultAbi, "withdraw", [grey]);
+  };
   const doRiskCheck = () => send("AI Risk Check", ADDRESSES.guardian as Address, guardianAbi, "requestRiskCheck", [ADDRESSES.vault]);
   const doReset = () => send("Reset Breaker", ADDRESSES.guardian as Address, guardianAbi, "resetBreaker", [ADDRESSES.vault]);
 
@@ -179,7 +189,8 @@ export default function DemoConsole() {
 
         <div className="row wrap">
           <button className="btn danger" disabled={!!busy} onClick={doDrain}>⚔️ Try Drain (80% TVL)</button>
-          <button className="btn" disabled={!!busy || (!!account && !isAdmin)} onClick={doRiskCheck} title={!isAdmin ? "protocol admin only" : ""}>🤖 AI Risk Check{account && !isAdmin ? " (admin)" : ""}</button>
+          <button className="btn primary" disabled={!!busy} onClick={doEscalate} title="Public — anyone can trigger the Somnia LLM agent">🤖 Trigger AI (25% TVL)</button>
+          <button className="btn" disabled={!!busy || (!!account && !isAdmin)} onClick={doRiskCheck} title={!isAdmin ? "protocol admin only" : ""}>🛰️ Proactive Check{account && !isAdmin ? " (admin)" : ""}</button>
           <button className="btn ghost" disabled={!!busy || (!!account && !isAdmin)} onClick={doReset} title={!isAdmin ? "protocol admin only" : ""}>♻️ Reset Breaker{account && !isAdmin ? " (admin)" : ""}</button>
         </div>
 

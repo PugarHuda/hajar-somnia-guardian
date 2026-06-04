@@ -133,6 +133,11 @@ export default function Home() {
               run the model and reach consensus on a 0–100 risk score; ≥ {s ? s.risk.toString() : "—"}{" "}
               latches the breaker. The verdict carries a receipt and N validator signatures — auditable on-chain.
             </p>
+            <p className="subagents">
+              <strong>+ two more Somnia agents on the same callback path:</strong> a{" "}
+              <em>JSON API</em> price-oracle sanity check (catches oracle manipulation / depeg) and
+              a <em>Parse Website</em> self-updating threat-intel feed (learns about new exploits).
+            </p>
           </div>
         </div>
         <div className="tier t3">
@@ -160,7 +165,7 @@ export default function Home() {
           <a href={explorer(ADDRESSES.vault)} target="_blank" rel="noreferrer">{short(ADDRESSES.vault)}</a>
         </div>
         <div className="addr">
-          <span className="k">HajarReactiveMonitor</span>
+          <span className="k">HajarReactiveSubscriber (Tier-3)</span>
           <a href={explorer(ADDRESSES.monitor)} target="_blank" rel="noreferrer">{short(ADDRESSES.monitor)}</a>
         </div>
         <div className="addr">

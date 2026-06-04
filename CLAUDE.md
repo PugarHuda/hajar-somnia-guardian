@@ -10,24 +10,34 @@ Autonomous DeFi Guardian on **Somnia** (Agentic L1). Submission for the **Somnia
 ## Run
 ```bash
 forge build
-forge test -vv          # 7 tests, all passing
+forge test -vv          # 28 tests, all passing
 forge script script/Deploy.s.sol --rpc-url somnia_testnet --broadcast --private-key $PRIVATE_KEY
 ```
 
 ## Architecture (the core idea)
-Two-tier security layer. Somnia Agent calls are **async** (request → callback), so:
-- **Tier 1** (`HajarGuardian.checkWithdrawal` → `_isHardViolation`): synchronous deterministic
-  rule, blocks blatant drains same-block by returning false (vault reverts). Does NOT latch
-  `paused` — reverting the trigger tx would roll the latch back anyway.
-- **Tier 2** (`_escalateToAI` → `handleResponse`): grey-zone activity escalated to Somnia
-  **LLM Inference agent** (`inferNumber`, 0–100 risk score). Validators reach consensus;
-  callback latches the circuit breaker if score >= `riskThreshold`.
+Multi-tenant three-tier security layer. Somnia Agent calls are **async** (request → callback), so:
+- **Tier 1** (`HajarGuardian.checkWithdrawal`): synchronous deterministic rule (single-tx drain
+  `>= hardBps` OR windowed velocity `>= rapidBps`), blocks blatant drains same-block by returning
+  false (vault reverts). Does NOT latch `paused` — reverting the trigger tx would roll the latch
+  back anyway. The per-protocol thresholds (`hardBps/rapidBps/greyBps/risk`) ARE the policy brain.
+- **Tier 2** (`_escalateToAI` → `handleResponse`): grey-zone activity (`>= greyBps`) escalated to
+  Somnia **LLM Inference agent** (`inferNumber`, 0–100 risk score). Validators reach consensus;
+  callback latches the breaker if score `>= risk`.
+- **Tier 2b** (`requestPriceCheck` → `handleResponse`, `Kind.Price`): external price sanity via
+  **JSON API agent** (`fetchUint`); divergence from `referencePrice` latches the breaker.
+- **Tier 2c** (`requestThreatScan` / `requestThreatScanJson`, `Kind.Threat`): self-updating threat
+  intel via **Parse Website** (`ExtractANumber`) + JSON API agents; high threat score latches.
+- **Tier 3** (`HajarReactiveSubscriber.onEvent` → `onReactiveSignal`): real validator-triggered
+  Reactivity subscription that latches in a separate execution.
 
 ## Key files
-- `src/HajarGuardian.sol` — guardian. **`_isHardViolation()` is the tunable policy brain.**
+- `src/HajarGuardian.sol` — guardian. The per-protocol thresholds (`hardBps/rapidBps/greyBps/risk`
+  set via `registerProtocol`/`setThresholds`) ARE the tunable policy brain; Tier-1 logic lives
+  inline in `checkWithdrawal()`.
 - `src/ProtectedVault.sol` — demo protected protocol.
-- `src/interfaces/ISomniaAgents.sol` — Somnia platform + agent interfaces.
-- `src/mocks/MockAgentPlatform.sol` — local validator simulation (`fulfillNumber`).
+- `src/HajarReactiveSubscriber.sol` — real Tier-3 (validator-triggered Reactivity subscription).
+- `src/interfaces/ISomniaAgents.sol` — Somnia platform + agent interfaces (reconciled to live ABI).
+- `test/mocks/MockAgentPlatform.sol` — local validator simulation (`fulfillNumber`); test-only.
 
 ## Conventions
 - Custom errors (not `require` strings) for reverts.
@@ -35,10 +45,11 @@ Two-tier security layer. Somnia Agent calls are **async** (request → callback)
 - Callbacks MUST guard `msg.sender == address(platform)` + track pending request ids.
 - Contract needs STT balance (`fund()`) to pay for AI escalations; `receive()` accepts rebates.
 
-## ⚠️ Known unverified surface
-`ISomniaAgents` is reconstructed from docs, self-consistent with the mock. Before testnet/
-mainnet, reconcile the `Request` struct + agent selectors with the official ABI.
-Grep `TODO(verify)`.
+## ABI status
+`ISomniaAgents` is **reconciled to the live platform ABI** (15-field `Request`, real agent
+selectors, verified by live testnet calls). No `TODO(verify)` left in `src/`. The one
+still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) — see
+`DISCORD_QUESTION.md`; don't guess that selector.
 
 ## Deployed (Somnia testnet — multi-tenant, all tiers live, no mocks)
 - HajarGuardian (multi-tenant) `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8`
