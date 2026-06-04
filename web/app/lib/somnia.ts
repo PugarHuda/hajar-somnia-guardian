@@ -24,9 +24,9 @@ export const client = createPublicClient({
 });
 
 export const ADDRESSES = {
-  guardian: "0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c",
-  vault: "0x94F214C604BC2f7A83647452cF6e48188b9b2461",
-  monitor: "0x87f431De9fFE5b61753925020bcc2C13aAd834B0",
+  guardian: "0x6BA6c7c52413A592F7799288CbC42d187ddda2f8",
+  vault: "0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39",
+  monitor: "0x9857aF25fFa558C382AbB916803Ee441502b0F8D", // real reactivity subscriber
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
@@ -40,30 +40,43 @@ export const txExplorer = (hash: string) =>
 //////////////////////////////////////////////////////////////*/
 
 export const guardianAbi = [
-  { type: "function", name: "paused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "paused", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
-  { type: "function", name: "hardWithdrawalBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "rapidDrainBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "greyZoneBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "riskThreshold", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "llmAgentId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "resetBreaker", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { type: "function", name: "requestRiskCheck", stateMutability: "nonpayable", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function", name: "protocols", stateMutability: "view", inputs: [{ type: "address" }],
+    outputs: [
+      { type: "bool", name: "registered" },
+      { type: "bool", name: "paused" },
+      { type: "address", name: "admin" },
+      { type: "address", name: "monitor" },
+      { type: "uint256", name: "hardBps" },
+      { type: "uint256", name: "rapidBps" },
+      { type: "uint256", name: "greyBps" },
+      { type: "uint256", name: "risk" },
+    ],
+  },
+  { type: "function", name: "resetBreaker", stateMutability: "nonpayable", inputs: [{ type: "address" }], outputs: [] },
+  { type: "function", name: "requestRiskCheck", stateMutability: "nonpayable", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
   { type: "event", name: "HardBlock", inputs: [
+    { type: "address", name: "vault", indexed: true },
     { type: "address", name: "user", indexed: true },
-    { type: "uint256", name: "amount", indexed: false },
     { type: "uint256", name: "bps", indexed: false }] },
   { type: "event", name: "AIVerdict", inputs: [
     { type: "uint256", name: "requestId", indexed: true },
+    { type: "address", name: "vault", indexed: true },
     { type: "uint256", name: "riskScore", indexed: false },
     { type: "uint256", name: "validatorCount", indexed: false },
     { type: "bool", name: "tripped", indexed: false }] },
   { type: "event", name: "EscalatedToAI", inputs: [
     { type: "uint256", name: "requestId", indexed: true },
-    { type: "address", name: "user", indexed: true },
+    { type: "address", name: "vault", indexed: true },
+    { type: "address", name: "user", indexed: false },
     { type: "uint256", name: "amount", indexed: false }] },
-  { type: "event", name: "CircuitBreakerTripped", inputs: [{ type: "string", name: "reason", indexed: false }] },
-  { type: "event", name: "CircuitBreakerReset", inputs: [] },
+  { type: "event", name: "CircuitBreakerTripped", inputs: [
+    { type: "address", name: "vault", indexed: true },
+    { type: "string", name: "reason", indexed: false }] },
+  { type: "event", name: "CircuitBreakerReset", inputs: [{ type: "address", name: "vault", indexed: true }] },
 ] as const;
 
 export const vaultAbi = [

@@ -71,20 +71,23 @@ protect. Too strict → false pauses; too loose → an exploit drains funds befo
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| HajarGuardian | `0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c` | [view](https://shannon-explorer.somnia.network/address/0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c) |
-| ProtectedVault | `0x94F214C604BC2f7A83647452cF6e48188b9b2461` | [view](https://shannon-explorer.somnia.network/address/0x94F214C604BC2f7A83647452cF6e48188b9b2461) |
-| HajarReactiveMonitor | `0x87f431De9fFE5b61753925020bcc2C13aAd834B0` | [view](https://shannon-explorer.somnia.network/address/0x87f431De9fFE5b61753925020bcc2C13aAd834B0) |
+| HajarGuardian (multi-tenant) | `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8` | [view](https://shannon-explorer.somnia.network/address/0x6BA6c7c52413A592F7799288CbC42d187ddda2f8) |
+| ProtectedVault | `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39` | [view](https://shannon-explorer.somnia.network/address/0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39) |
+| HajarReactiveSubscriber (real Tier-3) | `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` | [view](https://shannon-explorer.somnia.network/address/0x9857aF25fFa558C382AbB916803Ee441502b0F8D) |
 | Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
 
-**Verified live on testnet (all three tiers):**
+**Verified live on testnet (all three tiers, real — no mocks):**
 - **Tier 1** — hard-block reverts an 80%-of-TVL withdrawal.
-- **Tier 2 (the differentiator)** — `requestRiskCheck()` sent a real request to the Somnia
-  Agents platform; a 3-validator subcommittee ran Qwen3-30B inference and the consensus
-  `AIVerdict` was delivered on-chain via `handleResponse` (risk score decoded as `int256`).
-- **Tier 3** — a reactivity signal latches the circuit breaker (`paused = true`).
+- **Tier 2 (the differentiator)** — real requests sent to the Somnia Agents platform; a
+  3-validator subcommittee ran Qwen3-30B inference and consensus `AIVerdict`s were delivered
+  on-chain (proactive check → score 0; 30% withdrawal → score 10).
+- **Tier 3 (genuinely validator-triggered)** — `HajarReactiveSubscriber` registered a **real
+  on-chain Reactivity subscription** (id `4542758`) via the precompile `0x0100`. A withdrawal
+  emitted `Withdrawn`; ~20 blocks later the **validators auto-invoked** the subscriber's
+  `onEvent` in a separate execution (`ReactiveForwarded` event) → `onReactiveSignal`. No keeper.
 
-`LLM_AGENT_ID` = `12847293847561029384` (wired). The guardian is funded with STT to pay for
-AI escalations (~0.24 STT/call, subcommittee 3).
+Multi-tenant: any protocol can `registerProtocol()` its vault and get its own admin, breaker,
+and thresholds. `LLM_AGENT_ID` = `12847293847561029384`.
 
 **Somnia Agents — reconciled to the live ABI:**
 - **LLM Inference agent id:** `12847293847561029384` (Qwen3-30B, same id testnet & mainnet).

@@ -20,6 +20,7 @@ const eventAbi = [...guardianAbi, ...vaultAbi].filter((x) => x.type === "event")
 
 export default function DemoConsole() {
   const [account, setAccount] = useState<Address | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [stt, setStt] = useState<string>("—");
   const [vaultBal, setVaultBal] = useState<string>("—");
   const [amount, setAmount] = useState<string>("0.01");
@@ -31,12 +32,15 @@ export default function DemoConsole() {
   const note = (kind: "ok" | "err" | "info", text: string) => setMsg({ kind, text });
 
   const refreshBalances = useCallback(async (acc: Address) => {
-    const [bal, vb] = await Promise.all([
+    const [bal, vb, proto] = await Promise.all([
       client.getBalance({ address: acc }),
       client.readContract({ address: ADDRESSES.vault as Address, abi: vaultAbi, functionName: "balanceOf", args: [acc] }),
+      client.readContract({ address: ADDRESSES.guardian as Address, abi: guardianAbi, functionName: "protocols", args: [ADDRESSES.vault as Address] }),
     ]);
     setStt(Number(formatEther(bal)).toFixed(4));
     setVaultBal(Number(formatEther(vb as bigint)).toFixed(4));
+    const admin = (proto as unknown as { admin: string }).admin;
+    setIsAdmin(admin.toLowerCase() === acc.toLowerCase());
   }, []);
 
   const onConnect = async () => {
@@ -103,8 +107,8 @@ export default function DemoConsole() {
     if (big === 0n) return note("err", "Vault TVL is 0 — deposit first.");
     send("Try Drain (80% TVL)", ADDRESSES.vault as Address, vaultAbi, "withdraw", [big]);
   };
-  const doRiskCheck = () => send("AI Risk Check", ADDRESSES.guardian as Address, guardianAbi, "requestRiskCheck", []);
-  const doReset = () => send("Reset Breaker", ADDRESSES.guardian as Address, guardianAbi, "resetBreaker", []);
+  const doRiskCheck = () => send("AI Risk Check", ADDRESSES.guardian as Address, guardianAbi, "requestRiskCheck", [ADDRESSES.vault]);
+  const doReset = () => send("Reset Breaker", ADDRESSES.guardian as Address, guardianAbi, "resetBreaker", [ADDRESSES.vault]);
 
   // live event feed (from page load onward)
   useEffect(() => {
@@ -175,8 +179,8 @@ export default function DemoConsole() {
 
         <div className="row wrap">
           <button className="btn danger" disabled={!!busy} onClick={doDrain}>⚔️ Try Drain (80% TVL)</button>
-          <button className="btn" disabled={!!busy} onClick={doRiskCheck}>🤖 AI Risk Check</button>
-          <button className="btn ghost" disabled={!!busy} onClick={doReset}>♻️ Reset Breaker (owner)</button>
+          <button className="btn" disabled={!!busy || (!!account && !isAdmin)} onClick={doRiskCheck} title={!isAdmin ? "protocol admin only" : ""}>🤖 AI Risk Check{account && !isAdmin ? " (admin)" : ""}</button>
+          <button className="btn ghost" disabled={!!busy || (!!account && !isAdmin)} onClick={doReset} title={!isAdmin ? "protocol admin only" : ""}>♻️ Reset Breaker{account && !isAdmin ? " (admin)" : ""}</button>
         </div>
 
         {msg && <div className={`msg ${msg.kind}`}>{msg.text}</div>}

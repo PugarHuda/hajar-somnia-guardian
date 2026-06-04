@@ -25,12 +25,10 @@ export default function Home() {
   async function load() {
     try {
       const g = { address: ADDRESSES.guardian as `0x${string}`, abi: guardianAbi };
-      const [paused, hardBps, rapidBps, greyBps, risk, agentId, tvl] = await Promise.all([
-        client.readContract({ ...g, functionName: "paused" }),
-        client.readContract({ ...g, functionName: "hardWithdrawalBps" }),
-        client.readContract({ ...g, functionName: "rapidDrainBps" }),
-        client.readContract({ ...g, functionName: "greyZoneBps" }),
-        client.readContract({ ...g, functionName: "riskThreshold" }),
+      const vaultArg = [ADDRESSES.vault as `0x${string}`] as const;
+      const [paused, proto, agentId, tvl] = await Promise.all([
+        client.readContract({ ...g, functionName: "paused", args: vaultArg }),
+        client.readContract({ ...g, functionName: "protocols", args: vaultArg }),
         client.readContract({ ...g, functionName: "llmAgentId" }),
         client.readContract({
           address: ADDRESSES.vault as `0x${string}`,
@@ -38,7 +36,10 @@ export default function Home() {
           functionName: "totalAssets",
         }),
       ]);
-      setS({ paused, hardBps, rapidBps, greyBps, risk, agentId, tvl });
+      const p = proto as unknown as {
+        hardBps: bigint; rapidBps: bigint; greyBps: bigint; risk: bigint;
+      };
+      setS({ paused: paused as boolean, hardBps: p.hardBps, rapidBps: p.rapidBps, greyBps: p.greyBps, risk: p.risk, agentId: agentId as bigint, tvl: tvl as bigint });
       setErr(null);
       setAt(new Date().toLocaleTimeString());
     } catch (e: any) {

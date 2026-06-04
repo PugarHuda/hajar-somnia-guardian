@@ -40,12 +40,14 @@ Two-tier security layer. Somnia Agent calls are **async** (request → callback)
 mainnet, reconcile the `Request` struct + agent selectors with the official ABI.
 Grep `TODO(verify)`.
 
-## Deployed (Somnia testnet, ABI-reconciled + agentId wired)
-- HajarGuardian `0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c`
-- ProtectedVault `0x94F214C604BC2f7A83647452cF6e48188b9b2461`
-- HajarReactiveMonitor `0x87f431De9fFE5b61753925020bcc2C13aAd834B0`
-- LLM agentId `12847293847561029384`. Tier-2 AI verified live: AIVerdict callbacks delivered
-  (proactive check score 0; 30% withdrawal score 10) — real validator consensus.
+## Deployed (Somnia testnet — multi-tenant, all tiers live, no mocks)
+- HajarGuardian (multi-tenant) `0x6BA6c7c52413A592F7799288CbC42d187ddda2f8`
+- ProtectedVault `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39`
+- HajarReactiveSubscriber (real Tier-3) `0x9857aF25fFa558C382AbB916803Ee441502b0F8D` (subscriptionId 4542758)
+- LLM agentId `12847293847561029384`. Tier-2 AI verified live (scores 0 and 10, real validator consensus).
+- Tier-3 verified live: real Reactivity subscription via precompile 0x0100; withdrawal auto-triggered
+  the subscriber `onEvent` ~20 blocks later (validator-triggered, no keeper).
+- Multi-tenant: registerProtocol(vault,...); per-protocol admin/breaker/thresholds; paused(vault).
 - Frontend live: https://hajar-somnia-guardian.vercel.app (auto-deploys from GitHub web/).
 
 ## Somnia facts (verified Jun 2026)
