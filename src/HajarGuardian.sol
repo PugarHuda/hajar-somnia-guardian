@@ -90,10 +90,15 @@ contract HajarGuardian {
     mapping(uint256 requestId => PendingContext) public pending;
 
     /// @notice Self-updating threat-intelligence feed per protocol (learns about new exploits).
+    ///         Supports TWO sources: a Parse-Website scrape (flexible, learns from any page) and
+    ///         a JSON API endpoint (reliable, structured numeric score). Both yield a 0..100
+    ///         threat score and share the same threshold/verdict path.
     struct ThreatFeed {
         bool enabled;
-        string url; // a security feed (e.g. an advisory / incident page)
-        string prompt; // what to assess
+        string url; // Parse Website: a security feed (advisory / incident page)
+        string prompt; // Parse Website: what to assess
+        string jsonUrl; // JSON API: endpoint returning a numeric threat score
+        string jsonSelector; // JSON API: json-path to the score
         uint8 threatThreshold; // 0..100 score that latches the breaker
         uint8 confidenceThreshold;
         uint8 numPages;
@@ -339,9 +344,26 @@ contract HajarGuardian {
         uint8 confidenceThreshold,
         uint8 numPages
     ) external onlyProtocolAdmin(vault) {
-        threatFeeds[vault] =
-            ThreatFeed(true, url, prompt, threatThreshold, confidenceThreshold, numPages == 0 ? 1 : numPages);
+        ThreatFeed storage f = threatFeeds[vault];
+        f.enabled = true;
+        f.url = url;
+        f.prompt = prompt;
+        f.threatThreshold = threatThreshold;
+        f.confidenceThreshold = confidenceThreshold;
+        f.numPages = numPages == 0 ? 1 : numPages;
         emit ThreatFeedSet(vault, url);
+    }
+
+    /// @notice Configure the JSON-API threat source (reliable, structured numeric score).
+    function setThreatFeedJson(address vault, string calldata jsonUrl, string calldata jsonSelector)
+        external
+        onlyProtocolAdmin(vault)
+    {
+        ThreatFeed storage f = threatFeeds[vault];
+        f.enabled = true;
+        f.jsonUrl = jsonUrl;
+        f.jsonSelector = jsonSelector;
+        emit ThreatFeedSet(vault, jsonUrl);
     }
 
     /// @notice Scrape the protocol's security feed via the Parse Website agent and extract a
@@ -373,6 +395,30 @@ contract HajarGuardian {
         );
         requestId = platform.createRequest{value: needed}(
             parseAgentId, address(this), this.handleResponse.selector, payload
+        );
+        pending[requestId] =
+            PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, kind: Kind.Threat});
+        emit ThreatScanned(requestId, vault);
+    }
+
+    /// @notice Threat scan via the JSON API agent (reliable, structured). Point `jsonUrl` at a
+    ///         threat-intel API that returns a 0..100 score at `jsonSelector`. Same verdict path.
+    function requestThreatScanJson(address vault) external returns (uint256 requestId) {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.admin && msg.sender != p.monitor) revert NotProtocolAdmin();
+        ThreatFeed memory t = threatFeeds[vault];
+        if (!t.enabled || bytes(t.jsonUrl).length == 0) revert NotRegistered();
+
+        uint256 needed = platform.getRequestDeposit() + (jsonCostPerValidator * subcommitteeSize);
+        if (address(this).balance < needed) {
+            emit EscalationSkipped(vault, address(this), "underfunded");
+            return 0;
+        }
+
+        bytes memory payload =
+            abi.encodeWithSelector(IJsonApiAgent.fetchUint.selector, t.jsonUrl, t.jsonSelector, uint8(0));
+        requestId = platform.createRequest{value: needed}(
+            jsonAgentId, address(this), this.handleResponse.selector, payload
         );
         pending[requestId] =
             PendingContext({vault: vault, user: address(this), amount: 0, tvl: 0, active: true, kind: Kind.Threat});

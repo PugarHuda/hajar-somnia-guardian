@@ -224,6 +224,15 @@ contract HajarGuardianTest is Test {
         assertTrue(guardian.paused(address(vault)), "high threat should latch breaker");
     }
 
+    /// Threat intel via JSON API (reliable source): high score latches the breaker.
+    function test_ThreatIntelJson_HighScoreTrips() public {
+        guardian.setThreatFeedJson(address(vault), "https://api.x/threat?proto=foo", "data.score");
+        guardian.setThreatFeed(address(vault), "", "", 70, 50, 1); // sets threshold=70
+        uint256 reqId = guardian.requestThreatScanJson(address(vault));
+        platform.fulfillNumber(reqId, 90, 3); // structured threat score 90 >= 70
+        assertTrue(guardian.paused(address(vault)));
+    }
+
     /// Low threat score keeps the protocol running.
     function test_ThreatIntel_LowScore_NoTrip() public {
         guardian.setThreatFeed(address(vault), "https://rekt.news", "is this protocol exploited", 70, 50, 1);
