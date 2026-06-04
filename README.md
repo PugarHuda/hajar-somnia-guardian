@@ -71,14 +71,20 @@ protect. Too strict → false pauses; too loose → an exploit drains funds befo
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| HajarGuardian | `0xa5F1d1781bB50B41434E2f507667e22De3Df27a9` | [view](https://shannon-explorer.somnia.network/address/0xa5F1d1781bB50B41434E2f507667e22De3Df27a9) |
-| ProtectedVault | `0x7e02327D9e6097DA2a30C588A9BA62C923ad8AD6` | [view](https://shannon-explorer.somnia.network/address/0x7e02327D9e6097DA2a30C588A9BA62C923ad8AD6) |
-| HajarReactiveMonitor | `0x40C37188A192866459A50A6D68b6160De9812bFc` | [view](https://shannon-explorer.somnia.network/address/0x40C37188A192866459A50A6D68b6160De9812bFc) |
+| HajarGuardian | `0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c` | [view](https://shannon-explorer.somnia.network/address/0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c) |
+| ProtectedVault | `0x94F214C604BC2f7A83647452cF6e48188b9b2461` | [view](https://shannon-explorer.somnia.network/address/0x94F214C604BC2f7A83647452cF6e48188b9b2461) |
+| HajarReactiveMonitor | `0x87f431De9fFE5b61753925020bcc2C13aAd834B0` | [view](https://shannon-explorer.somnia.network/address/0x87f431De9fFE5b61753925020bcc2C13aAd834B0) |
 | Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
 
-**Verified live on testnet:** hard-block reverts an 80%-of-TVL withdrawal; a reactivity
-signal latches the circuit breaker (`paused = true`). `LLM_AGENT_ID` is `0` until set via
-`setLlmAgentId` (Tier-1/Tier-3 work without it).
+**Verified live on testnet (all three tiers):**
+- **Tier 1** — hard-block reverts an 80%-of-TVL withdrawal.
+- **Tier 2 (the differentiator)** — `requestRiskCheck()` sent a real request to the Somnia
+  Agents platform; a 3-validator subcommittee ran Qwen3-30B inference and the consensus
+  `AIVerdict` was delivered on-chain via `handleResponse` (risk score decoded as `int256`).
+- **Tier 3** — a reactivity signal latches the circuit breaker (`paused = true`).
+
+`LLM_AGENT_ID` = `12847293847561029384` (wired). The guardian is funded with STT to pay for
+AI escalations (~0.24 STT/call, subcommittee 3).
 
 **Somnia Agents — reconciled to the live ABI:**
 - **LLM Inference agent id:** `12847293847561029384` (Qwen3-30B, same id testnet & mainnet).

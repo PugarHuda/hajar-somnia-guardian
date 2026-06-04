@@ -40,6 +40,14 @@ Two-tier security layer. Somnia Agent calls are **async** (request → callback)
 mainnet, reconcile the `Request` struct + agent selectors with the official ABI.
 Grep `TODO(verify)`.
 
+## Deployed (Somnia testnet, ABI-reconciled + agentId wired)
+- HajarGuardian `0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c`
+- ProtectedVault `0x94F214C604BC2f7A83647452cF6e48188b9b2461`
+- HajarReactiveMonitor `0x87f431De9fFE5b61753925020bcc2C13aAd834B0`
+- LLM agentId `12847293847561029384`. Tier-2 AI verified live: AIVerdict callbacks delivered
+  (proactive check score 0; 30% withdrawal score 10) — real validator consensus.
+- Frontend live: https://hajar-somnia-guardian.vercel.app (auto-deploys from GitHub web/).
+
 ## Somnia facts (verified Jun 2026)
 - Platform: testnet `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` (chain 50312),
   mainnet `0x5E5205CF39E766118C01636bED000A54D93163E6` (chain 5031).

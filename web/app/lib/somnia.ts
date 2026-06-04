@@ -24,9 +24,9 @@ export const client = createPublicClient({
 });
 
 export const ADDRESSES = {
-  guardian: "0xa5F1d1781bB50B41434E2f507667e22De3Df27a9",
-  vault: "0x7e02327D9e6097DA2a30C588A9BA62C923ad8AD6",
-  monitor: "0x40C37188A192866459A50A6D68b6160De9812bFc",
+  guardian: "0xA86BF12a1dc048EC0526A2d4da98a033A8b6374c",
+  vault: "0x94F214C604BC2f7A83647452cF6e48188b9b2461",
+  monitor: "0x87f431De9fFE5b61753925020bcc2C13aAd834B0",
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
