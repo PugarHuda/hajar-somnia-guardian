@@ -130,7 +130,8 @@ export default function DemoConsole() {
     const poll = async () => {
       try {
         const latest = await client.getBlockNumber();
-        const from = startBlock.current && latest - startBlock.current < 1500n ? startBlock.current : latest - 1500n;
+        // Somnia RPC caps eth_getLogs at a 1000-block range, so stay under it (was 1500 → always errored).
+        const from = startBlock.current && latest - startBlock.current < 900n ? startBlock.current : latest - 900n;
         const logs = await client.getLogs({
           address: [ADDRESSES.guardian as Address, ADDRESSES.vault as Address],
           fromBlock: from,
