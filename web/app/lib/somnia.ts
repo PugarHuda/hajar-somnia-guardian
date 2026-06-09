@@ -28,7 +28,7 @@ export const ADDRESSES = {
   // guard, TVL-drop detector) on top of v3's Tier-2d remediation + Tier-2b/2c. via_ir build.
   guardian: "0xf47D21Afd23639870c5185462B2F418eF59d6F67",
   vault: "0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043",
-  monitor: "0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502", // Tier-3 reactivity subscriber (v3-proven; v4 subscriber pending)
+  monitor: "0xd6Fa24d9e388D12086D430e9F14ff99980E7789b", // Tier-3 reactivity subscriber bound to v4 (subscriptionId 5981959)
   learner: "0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e", // self-learning threat-intel engine (uses all 3 agents)
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;

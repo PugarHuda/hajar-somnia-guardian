@@ -150,12 +150,14 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
 | **HajarThreatLearner** (self-learning, all 3 agents) | `0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e` | [view](https://shannon-explorer.somnia.network/address/0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e) |
 | ProtectedVault (v4) | `0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043` | [view](https://shannon-explorer.somnia.network/address/0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043) |
 | HajarGuardian v3 (Tier-1/2/2b/2c/2d + Tier-3, all verified live) | `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c` | [view](https://shannon-explorer.somnia.network/address/0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c) |
-| HajarReactiveSubscriber (real Tier-3, bound to v3) | `0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502` | [view](https://shannon-explorer.somnia.network/address/0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502) |
+| **HajarReactiveSubscriber (real Tier-3, bound to v4)** | `0xd6Fa24d9e388D12086D430e9F14ff99980E7789b` | [view](https://shannon-explorer.somnia.network/address/0xd6Fa24d9e388D12086D430e9F14ff99980E7789b) |
+| HajarReactiveSubscriber (Tier-3, bound to v3) | `0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502` | [view](https://shannon-explorer.somnia.network/address/0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502) |
 | Somnia Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
 
-> **All tiers now live on the single guardian v3** (`0x5445…bc9c`). The Tier-3 subscriber
-> (`0x5aE1…D502`, subscription id `4638272`) is bound to v3 and **verified live**: a withdrawal
-> auto-fired its `onEvent` ~25 blocks later (`ReactiveForwarded`), validator-triggered, no keeper.
+> **All tiers now live on the single guardian v4** (`0xf47D…6F67`). The Tier-3 subscriber
+> (`0xd6Fa…789b`, subscription id `5981959`) is bound to v4 and **verified live**: a withdrawal
+> auto-fired its `onEvent` ~20 blocks later (`ReactiveForwarded`, amount 0.01 / tvlBefore 0.09),
+> validator-triggered, no keeper. The full ERC-8004 identity + self-learning threat brain are live too.
 
 **Verified live on testnet (all tiers, real — no mocks):**
 - **Tier 1** — a hard-block reverts an 80%-of-TVL withdrawal same-block.

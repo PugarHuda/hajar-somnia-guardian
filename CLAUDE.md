@@ -88,7 +88,9 @@ still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) �
   (setGuardian→v4, registered, outflowBudget 7000, tvlMonitor 2000, funded 0.3 STT, seeded 0.1 TVL).
   Deploy gotcha: `--gas-limit` in forge script = block-gas-limit (ignored per-tx); use
   `-g 2000` (gas-estimate-multiplier) for Somnia's ~8-10× gas. Frontend + keeper point here.
-  Tier-3 subscriber for v4 NOT yet deployed (Tier-3 remains v3-proven).
+  Tier-3 subscriber for v4 `0xd6Fa24d9e388D12086D430e9F14ff99980E7789b` (subscriptionId 5981959)
+  — LIVE-VERIFIED: withdrawal 0.01 auto-fired ReactiveForwarded +20 blocks (validator-triggered).
+  ALL tiers now live on v4. Web has a /slide pitch deck.
 - **HajarAgentRegistry (ERC-8004)** `0xEa28EDF008A204BFeD65bD093ad5BC219fd35152` — Hajar registered
   as agentId 1, tokenURI = live agent-card. On-chain agent identity (owner=deployer, verified).
 - **HajarThreatLearner (self-learning)** `0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e` — uses all 3
