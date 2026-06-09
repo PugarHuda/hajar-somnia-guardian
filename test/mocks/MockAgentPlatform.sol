@@ -146,6 +146,40 @@ contract MockAgentPlatform is IAgentRequester {
         );
     }
 
+    /// @notice Test helper: simulate validators returning an `inferString` classification (the
+    ///         result is an ABI-encoded string), then invoke the callback.
+    function fulfillString(uint256 requestId, string calldata value, uint256 validatorCount) external {
+        Stored storage r = requests[requestId];
+        require(!r.fulfilled, "already fulfilled");
+        r.fulfilled = true;
+
+        bytes memory enc = abi.encode(value);
+        Response[] memory responses = new Response[](validatorCount);
+        for (uint256 i = 0; i < validatorCount; i++) {
+            responses[i] = Response({
+                validator: address(uint160(0xA11DA700 + i)),
+                result: enc,
+                status: ResponseStatus.Success,
+                receipt: requestId * 1000 + i,
+                timestamp: block.timestamp,
+                executionCost: 0.07 ether
+            });
+        }
+
+        Request memory details;
+        details.id = requestId;
+        details.requester = r.requester;
+        details.callbackAddress = r.callbackAddress;
+        details.callbackSelector = r.callbackSelector;
+        details.responses = responses;
+        details.responseCount = validatorCount;
+        details.status = ResponseStatus.Success;
+
+        IAgentRequesterHandler(r.callbackAddress).handleResponse(
+            requestId, responses, ResponseStatus.Success, details
+        );
+    }
+
     /// @notice Flexible fulfill: per-validator score + status (test mixed/failed/negative).
     function fulfillCustom(uint256 requestId, int256[] calldata scores, uint8[] calldata statuses)
         external

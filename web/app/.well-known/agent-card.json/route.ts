@@ -38,6 +38,7 @@ export async function GET() {
     services: [
       { name: "MCP", endpoint: `${base}/api/mcp`, version: "2025-06-18" },
       { name: "state", endpoint: `${base}/api/state`, version: "1.0.0" },
+      { name: "threat-intel", endpoint: `${base}/api/learn`, version: "1.0.0" },
       { name: "web", endpoint: base },
     ],
     // x402 (Coinbase agent-payments) — vision: agents pay-per-risk-query for Hajar-as-a-Service.

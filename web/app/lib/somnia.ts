@@ -29,6 +29,7 @@ export const ADDRESSES = {
   guardian: "0xf47D21Afd23639870c5185462B2F418eF59d6F67",
   vault: "0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043",
   monitor: "0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502", // Tier-3 reactivity subscriber (v3-proven; v4 subscriber pending)
+  learner: "0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e", // self-learning threat-intel engine (uses all 3 agents)
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
@@ -130,6 +131,22 @@ export const guardianAbi = [
     { type: "uint256", name: "currentTvl", indexed: false },
     { type: "uint256", name: "unexplainedBps", indexed: false },
     { type: "bool", name: "latched", indexed: false }] },
+] as const;
+
+export const learnerAbi = [
+  { type: "function", name: "categoryCount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "categoryIds", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "bytes32" }] },
+  {
+    type: "function", name: "knowledge", stateMutability: "view", inputs: [{ type: "bytes32" }],
+    outputs: [
+      { type: "bool", name: "known" },
+      { type: "uint8", name: "level" },
+      { type: "uint64", name: "lastUpdated" },
+      { type: "uint32", name: "observations" },
+      { type: "string", name: "name" },
+    ],
+  },
+  { type: "function", name: "highestThreat", stateMutability: "view", inputs: [], outputs: [{ type: "string" }, { type: "uint8" }] },
 ] as const;
 
 export const vaultAbi = [

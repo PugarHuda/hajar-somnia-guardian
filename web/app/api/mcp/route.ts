@@ -39,6 +39,18 @@ export async function GET() {
         parameters: {},
         returns: "application/json",
       },
+      {
+        name: "get_threat_intelligence",
+        description:
+          "Returns Hajar's self-learned threat knowledge base: per exploit category (reentrancy, " +
+          "oracle-manipulation, flash-loan, …) the latest learned threat level (0..100), when it " +
+          "was last updated, and how many observations — learned autonomously from external " +
+          "security feeds via the Somnia Parse Website + JSON API + LLM agents.",
+        method: "GET",
+        url: `${base}/api/learn`,
+        parameters: {},
+        returns: "application/json",
+      },
     ],
     docs: "https://github.com/PugarHuda/hajar-somnia-guardian",
   });

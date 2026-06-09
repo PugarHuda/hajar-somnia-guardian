@@ -36,6 +36,7 @@ env:
   RPC: ${{ vars.SOMNIA_RPC }}
   GUARDIAN: ${{ vars.GUARDIAN_ADDRESS }}
   VAULT: ${{ vars.VAULT_ADDRESS }}
+  LEARNER: ${{ vars.LEARNER_ADDRESS }}
 
 jobs:
   heartbeat:
@@ -83,3 +84,17 @@ jobs:
           cast send "$GUARDIAN" "requestRiskCheck(address)" "$VAULT" \
             --rpc-url "$RPC" --private-key "${{ secrets.GUARDIAN_KEY }}" \
             --legacy --gas-limit 6000000
+
+      # Self-learning: scrape each exploit category's current threat level from the live web via
+      # the Somnia Parse Website agent, so Hajar's knowledge base stays current with no human.
+      - name: learn threat categories
+        if: env.LEARNER != ''
+        continue-on-error: true
+        run: |
+          for CAT in oracle-manipulation reentrancy flash-loan; do
+            ID=$(cast keccak "$CAT")
+            echo "learning $CAT ($ID)"
+            cast send "$LEARNER" "learn(bytes32)" "$ID" \
+              --rpc-url "$RPC" --private-key "${{ secrets.GUARDIAN_KEY }}" \
+              --legacy --gas-limit 8000000 || echo "skip $CAT"
+          done
