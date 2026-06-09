@@ -82,7 +82,16 @@ still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) �
 `DISCORD_QUESTION.md`; don't guess that selector.
 
 ## Deployed (Somnia testnet — multi-tenant, all tiers live, no mocks)
-- **HajarGuardian v3 (current, all agents + remediation)** `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c`
+- **HajarGuardian v4 (CURRENT — hardening tiers)** `0xf47D21Afd23639870c5185462B2F418eF59d6F67`
+  — v3 features + Tier-1c spot-price guard + Tier-1d outflow budget + TVL-drop detector. Deployed
+  9 Jun 2026 (via_ir build, 21,650 B). Vault v4 `0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043`
+  (setGuardian→v4, registered, outflowBudget 7000, tvlMonitor 2000, funded 0.3 STT, seeded 0.1 TVL).
+  Deploy gotcha: `--gas-limit` in forge script = block-gas-limit (ignored per-tx); use
+  `-g 2000` (gas-estimate-multiplier) for Somnia's ~8-10× gas. Frontend + keeper point here.
+  Tier-3 subscriber for v4 NOT yet deployed (Tier-3 remains v3-proven).
+- **HajarAgentRegistry (ERC-8004)** `0xEa28EDF008A204BFeD65bD093ad5BC219fd35152` — Hajar registered
+  as agentId 1, tokenURI = live agent-card. On-chain agent identity (owner=deployer, verified).
+- **HajarGuardian v3** `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c`
   — v2 features + **Tier-2d autonomous remediation (inferToolsChat)**. Live-verified 4 Jun 2026:
   inferToolsChat reached validator consensus, AI reasoned "No action required" on a healthy vault
   → finishReason="stop", RemediationVerdict acted=false (correct, no false latch). Raw fulfill

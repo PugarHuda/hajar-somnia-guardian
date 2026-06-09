@@ -125,9 +125,9 @@ it *is* a discoverable ERC-8004 agent other agents can find and verify, and it *
 
 ```bash
 forge build
-forge test -vv     # 33 passing tests: all tiers, price oracle, threat intel,
-                   # autonomous remediation (tools-chat), pause/reset, whitelist,
-                   # multi-tenant isolation, velocity, reentrancy, fuzz, auth guards
+forge test -vv     # 51 passing tests: all tiers, hardening (outflow budget, spot-price
+                   # guard, TVL-drop detector), ERC-8004 registry, price oracle, threat intel,
+                   # autonomous remediation, pause/reset, whitelist, multi-tenant, fuzz, auth
 ```
 
 ## Deploy to Somnia testnet
@@ -144,8 +144,10 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| HajarGuardian v3 (multi-tenant, all agents + remediation) | `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c` | [view](https://shannon-explorer.somnia.network/address/0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c) |
-| ProtectedVault | `0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39` | [view](https://shannon-explorer.somnia.network/address/0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39) |
+| **HajarGuardian v4** (current — + outflow budget, spot-price guard, TVL-drop detector) | `0xf47D21Afd23639870c5185462B2F418eF59d6F67` | [view](https://shannon-explorer.somnia.network/address/0xf47D21Afd23639870c5185462B2F418eF59d6F67) |
+| **HajarAgentRegistry** (ERC-8004 — Hajar = agentId 1) | `0xEa28EDF008A204BFeD65bD093ad5BC219fd35152` | [view](https://shannon-explorer.somnia.network/address/0xEa28EDF008A204BFeD65bD093ad5BC219fd35152) |
+| ProtectedVault (v4) | `0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043` | [view](https://shannon-explorer.somnia.network/address/0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043) |
+| HajarGuardian v3 (Tier-1/2/2b/2c/2d + Tier-3, all verified live) | `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c` | [view](https://shannon-explorer.somnia.network/address/0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c) |
 | HajarReactiveSubscriber (real Tier-3, bound to v3) | `0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502` | [view](https://shannon-explorer.somnia.network/address/0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502) |
 | Somnia Agents platform | `0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776` | (Somnia) |
 
