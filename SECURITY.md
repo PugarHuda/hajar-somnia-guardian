@@ -25,6 +25,7 @@ threat model, the deliberate safety choices, and the known limitations — hones
 | 2d — remediation | Latches **only** on a decoded `pause()` tool call; anything else → no action | **fail-closed on action** |
 | 3 — reactivity | Validator-triggered latch in a separate execution | fail-safe |
 | TVL-drop detector | Latches in a separate execution when TVL falls MORE than the guarded outflow we recorded; opt-in | **fail-safe on action** |
+| Self-learning intel | `HajarThreatLearner` scrapes/classifies external feeds via all 3 agents into an on-chain knowledge base; bad/empty response → no record (no fake data) | **fail-open** (knowledge only) |
 
 The split is deliberate: a withdrawal must never be *blocked by accident* (Tier-1/2 fail open on
 infra problems), but the breaker must never *latch by accident* (Tier-2d/3 fail closed on action).
@@ -75,6 +76,22 @@ end in an abnormal outflow, so this is broad — but the boundary matters and we
   that don't move value out of the vault in an abnormal pattern are **outside the model**. Hajar is a
   circuit breaker on abnormal outflow, not a formal-verification or internal-accounting auditor.
   Treat it as defense-in-depth alongside audits, not a replacement.
+
+## On "self-learning" (honest scope)
+
+`HajarThreatLearner` is a real, autonomous **knowledge loop** — NOT on-chain model training (which
+is infeasible). It uses the three Somnia agents to read the outside world and keep an on-chain
+threat knowledge base current:
+- **Parse Website** scrapes a security feed (rekt.news / advisories) and extracts a 0..100 threat
+  level per exploit category. *Caveat:* Parse-Website consensus is unreliable on Somnia testnet
+  today (validators diverge on scrapes) — it fails open (no record) rather than inventing data.
+- **JSON API** pulls a structured score (verified live: it learned `market-stress = 10` from the
+  Fear & Greed Index via validator consensus, recorded on-chain).
+- **LLM `inferString`** classifies an observed pattern onto the exploit taxonomy.
+
+What it genuinely does: **accumulate + update** threat knowledge from external sources over time,
+with no human in the loop (keeper-driven). What it does NOT do: invent new detection logic by
+itself, or train a model. The knowledge informs policy and is exposed to other agents (`/api/learn`).
 
 ## Known limitations (honest)
 

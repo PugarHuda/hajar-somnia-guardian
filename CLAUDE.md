@@ -91,6 +91,10 @@ still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) �
   Tier-3 subscriber for v4 NOT yet deployed (Tier-3 remains v3-proven).
 - **HajarAgentRegistry (ERC-8004)** `0xEa28EDF008A204BFeD65bD093ad5BC219fd35152` — Hajar registered
   as agentId 1, tokenURI = live agent-card. On-chain agent identity (owner=deployer, verified).
+- **HajarThreatLearner (self-learning)** `0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e` — uses all 3
+  agents (Parse/JSON/LLM inferString) to accumulate an on-chain exploit-knowledge base. Live-proven:
+  learned market-stress=10 from Fear&Greed Index via JSON API consensus. 5 categories, funded.
+  src/HajarThreatLearner.sol. NOT model training — honest knowledge-accumulation loop.
 - **HajarGuardian v3** `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c`
   — v2 features + **Tier-2d autonomous remediation (inferToolsChat)**. Live-verified 4 Jun 2026:
   inferToolsChat reached validator consensus, AI reasoned "No action required" on a healthy vault
