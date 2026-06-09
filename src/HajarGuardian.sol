@@ -16,6 +16,13 @@ interface IVaultTVL {
     function totalAssets() external view returns (uint256);
 }
 
+/// @notice Optional: a protocol may expose a synchronous spot price (e.g. its own AMM/pool quote)
+///         so the guardian can atomically reject manipulated-price withdrawals in the SAME tx —
+///         the only thing that can stop an atomic flash-loan attack (async AI is always too late).
+interface IVaultSpotPrice {
+    function spotPrice() external view returns (uint256);
+}
+
 /// @title HajarGuardian
 /// @notice A multi-tenant, three-tier autonomous security layer for DeFi protocols on Somnia.
 ///         ANY protocol can `registerProtocol()` its vault and instantly get exploit protection
@@ -121,6 +128,48 @@ contract HajarGuardian {
 
     mapping(address vault => PriceFeed) public priceFeeds;
 
+    /// @notice Tier-1d — vault-wide cumulative outflow budget (catches a SLOW, DISTRIBUTED drain).
+    ///         The per-user velocity window can be defeated by sybils: many addresses each
+    ///         withdrawing under the per-user limit. This aggregates outflow across ALL users in a
+    ///         window and atomically blocks once the vault has bled `budgetBps` of its window-start
+    ///         TVL — no matter how many addresses it was spread across.
+    struct OutflowBudget {
+        bool enabled;
+        uint64 start; // window start (unix seconds)
+        uint192 cumAmount; // cumulative outflow across all users this window
+        uint256 budgetBps; // block once cumAmount >= budgetBps of baselineTvl
+        uint256 baselineTvl; // TVL snapshot at window start
+    }
+
+    mapping(address vault => OutflowBudget) public outflowBudgets;
+
+    /// @notice TVL-drop detector — catches drains that BYPASS the withdrawal hook entirely
+    ///         (a bug in another function, a direct transfer, any path that doesn't call
+    ///         `checkWithdrawal`). The guardian samples the vault's reported TVL and latches the
+    ///         breaker when it falls by `dropBps` MORE than the guarded outflow we actually saw.
+    ///         Runs in a separate execution (admin/monitor/reactive) so it CAN latch.
+    struct TvlMonitor {
+        bool enabled;
+        uint256 dropBps; // latch if the UNEXPLAINED drop >= dropBps of baseline
+        uint256 baselineTvl; // last known-healthy TVL
+        uint256 accountedOutflow; // guarded outflow recorded since baseline (the "explained" part)
+    }
+
+    mapping(address vault => TvlMonitor) public tvlMonitors;
+
+    /// @notice Tier-1c — synchronous spot-price deviation guard. If the protocol exposes a
+    ///         `spotPrice()`, the guardian reads it INLINE on every withdrawal and atomically
+    ///         reverts when it diverges from the trusted reference beyond `maxDeviationBps`. Unlike
+    ///         the async Tier-2b oracle check, this fires in the same tx — the only tier that can
+    ///         stop an atomic flash-loan price manipulation before the funds leave.
+    struct SpotGuard {
+        bool enabled;
+        uint256 referencePrice; // trusted/expected price
+        uint256 maxDeviationBps; // atomic block once |spot - referencePrice| / referencePrice >= this
+    }
+
+    mapping(address vault => SpotGuard) public spotGuards;
+
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -141,6 +190,12 @@ contract HajarGuardian {
     event ThreatVerdict(uint256 indexed requestId, address indexed vault, uint256 threatScore, bool alarm);
     event RemediationRequested(uint256 indexed requestId, address indexed vault);
     event RemediationVerdict(uint256 indexed requestId, address indexed vault, string finishReason, bool acted);
+    event OutflowBudgetSet(address indexed vault, uint256 budgetBps);
+    event OutflowBudgetBlocked(address indexed vault, address indexed user, uint256 cumBps);
+    event TvlMonitorSet(address indexed vault, uint256 dropBps, uint256 baselineTvl);
+    event TvlChecked(address indexed vault, uint256 currentTvl, uint256 unexplainedBps, bool latched);
+    event SpotGuardSet(address indexed vault, uint256 referencePrice, uint256 maxDeviationBps);
+    event SpotPriceBlocked(address indexed vault, address indexed user, uint256 spotPrice, uint256 divergenceBps);
     event CircuitBreakerTripped(address indexed vault, string reason);
     event CircuitBreakerReset(address indexed vault);
     event OwnershipTransferStarted(address indexed from, address indexed to);
@@ -213,7 +268,13 @@ contract HajarGuardian {
         address vault = msg.sender;
         Protocol storage p = protocols[vault];
         if (!p.registered) revert NotRegistered();
-        if (whitelisted[vault][user]) return true;
+        if (whitelisted[vault][user]) {
+            // A whitelisted withdrawal still passes THROUGH the guardian, so it's a *seen* outflow:
+            // record it for the TVL-drop detector or its TVL drop would look unexplained (false latch).
+            TvlMonitor storage wm = tvlMonitors[vault];
+            if (wm.enabled) wm.accountedOutflow += amount;
+            return true;
+        }
         if (tvlBefore == 0) return true;
 
         uint256 bps = (amount * 10_000) / tvlBefore;
@@ -225,6 +286,18 @@ contract HajarGuardian {
             emit HardBlock(vault, user, bps);
             return false;
         }
+
+        // Tier 1c: synchronous spot-price deviation guard (atomic — the ONLY tier that can stop an
+        // in-tx flash-loan price manipulation; async AI is always one block too late).
+        if (!_spotPriceOk(vault, user)) return false;
+
+        // Tier 1d: vault-wide cumulative outflow budget (catches a slow drain sprayed over sybils).
+        if (!_outflowBudgetOk(vault, user, amount, tvlBefore)) return false;
+
+        // This withdrawal is allowed: record it as "explained" outflow for the TVL-drop detector,
+        // so a later checkTvlDrop() doesn't mistake legitimate guarded outflow for a hidden drain.
+        TvlMonitor storage tm = tvlMonitors[vault];
+        if (tm.enabled) tm.accountedOutflow += amount;
 
         // Tier 2: grey zone -> escalate to AI (async, best-effort, never blocks).
         if (bps >= p.greyBps || windowBps >= p.greyBps) {
@@ -246,6 +319,125 @@ contract HajarGuardian {
         Window storage w = windows[vault][user];
         if (tvl == 0 || block.timestamp > uint256(w.start) + windowSeconds) return 0;
         return (uint256(w.cumAmount) * 10_000) / tvl;
+    }
+
+    /// @dev Tier-1c: returns false (→ atomic block) when an enabled spot-price guard sees the
+    ///      vault's live `spotPrice()` diverge from the reference beyond the limit. Default-off, so
+    ///      protocols without a `spotPrice()` are never called.
+    function _spotPriceOk(address vault, address user) internal returns (bool) {
+        SpotGuard storage sg = spotGuards[vault];
+        if (!sg.enabled || sg.referencePrice == 0) return true;
+        // Fail-OPEN if the price can't be read (vault missing spotPrice(), reverting view): an infra
+        // problem must never brick withdrawals (SECURITY.md). Fail-CLOSED only on a real divergence.
+        try IVaultSpotPrice(vault).spotPrice() returns (uint256 spot) {
+            uint256 divBps = (_absDiff(spot, sg.referencePrice) * 10_000) / sg.referencePrice;
+            if (divBps >= sg.maxDeviationBps) {
+                emit SpotPriceBlocked(vault, user, spot, divBps);
+                return false;
+            }
+        } catch {}
+        return true;
+    }
+
+    /// @dev Tier-1d: accumulates outflow across ALL users in a rolling window and returns false
+    ///      (→ atomic block) once the vault has bled `budgetBps` of its window-start TVL. The
+    ///      accumulator only persists for withdrawals that actually go through — a blocked call
+    ///      reverts in the vault, rolling the increment back (same no-latch invariant as Tier-1).
+    function _outflowBudgetOk(address vault, address user, uint256 amount, uint256 tvlBefore)
+        internal
+        returns (bool)
+    {
+        OutflowBudget storage ob = outflowBudgets[vault];
+        if (!ob.enabled) return true;
+        if (block.timestamp > uint256(ob.start) + windowSeconds || ob.baselineTvl == 0) {
+            ob.start = uint64(block.timestamp);
+            ob.cumAmount = 0;
+            ob.baselineTvl = tvlBefore;
+        }
+        ob.cumAmount += uint192(amount);
+        uint256 cumBps = (uint256(ob.cumAmount) * 10_000) / ob.baselineTvl;
+        if (cumBps >= ob.budgetBps) {
+            emit OutflowBudgetBlocked(vault, user, cumBps);
+            return false;
+        }
+        return true;
+    }
+
+    /// @notice Enable/update the vault-wide outflow budget. `budgetBps` of TVL may flow out (across
+    ///         all users combined) per velocity window before withdrawals are blocked.
+    function setOutflowBudget(address vault, uint256 budgetBps) external onlyProtocolAdmin(vault) {
+        OutflowBudget storage ob = outflowBudgets[vault];
+        ob.enabled = budgetBps != 0;
+        ob.budgetBps = budgetBps;
+        ob.start = 0; // force a fresh window on the next withdrawal
+        ob.cumAmount = 0;
+        ob.baselineTvl = 0;
+        emit OutflowBudgetSet(vault, budgetBps);
+    }
+
+    /// @notice Enable/update the synchronous spot-price guard. The vault must expose `spotPrice()`.
+    function setSpotGuard(address vault, uint256 referencePrice, uint256 maxDeviationBps)
+        external
+        onlyProtocolAdmin(vault)
+    {
+        spotGuards[vault] = SpotGuard(true, referencePrice, maxDeviationBps);
+        emit SpotGuardSet(vault, referencePrice, maxDeviationBps);
+    }
+
+    function setSpotReference(address vault, uint256 referencePrice) external onlyProtocolAdmin(vault) {
+        spotGuards[vault].referencePrice = referencePrice;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+              TVL-DROP DETECTOR — catches bypass-hook drains
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Enable the TVL-drop detector and snapshot the current healthy TVL as the baseline.
+    /// @param dropBps the UNEXPLAINED drop (beyond guarded outflow) that latches the breaker.
+    function setTvlMonitor(address vault, uint256 dropBps) external onlyProtocolAdmin(vault) {
+        TvlMonitor storage tm = tvlMonitors[vault];
+        tm.enabled = true;
+        tm.dropBps = dropBps;
+        tm.baselineTvl = IVaultTVL(vault).totalAssets();
+        tm.accountedOutflow = 0;
+        emit TvlMonitorSet(vault, dropBps, tm.baselineTvl);
+    }
+
+    /// @notice Re-snapshot the baseline to the current TVL (call after legitimate large flows).
+    function syncTvlBaseline(address vault) external onlyProtocolAdmin(vault) {
+        TvlMonitor storage tm = tvlMonitors[vault];
+        if (!tm.enabled) revert NotRegistered();
+        tm.baselineTvl = IVaultTVL(vault).totalAssets();
+        tm.accountedOutflow = 0;
+    }
+
+    /// @notice Sample the vault's TVL and latch the breaker if it dropped MORE than the guarded
+    ///         outflow we recorded — i.e. value left through a path the guardian never saw. Call on
+    ///         a schedule (cron) or wire it to the reactive monitor. Runs in a separate execution,
+    ///         so it CAN latch (unlike synchronous Tier-1).
+    function checkTvlDrop(address vault) external returns (bool latched) {
+        Protocol storage p = protocols[vault];
+        if (msg.sender != p.admin && msg.sender != p.monitor) revert NotProtocolAdmin();
+        TvlMonitor storage tm = tvlMonitors[vault];
+        if (!tm.enabled) revert NotRegistered();
+
+        uint256 current = IVaultTVL(vault).totalAssets();
+        uint256 unexplainedBps;
+        if (current < tm.baselineTvl) {
+            uint256 drop = tm.baselineTvl - current;
+            uint256 explained = tm.accountedOutflow >= drop ? drop : tm.accountedOutflow;
+            uint256 unexplained = drop - explained;
+            unexplainedBps = (unexplained * 10_000) / tm.baselineTvl;
+            if (unexplainedBps >= tm.dropBps) {
+                p.paused = true;
+                latched = true;
+                emit CircuitBreakerTripped(vault, "tvl-drop-bypass");
+            }
+        }
+        // Re-baseline either way so a single observed drop isn't re-detected on every subsequent call.
+        tm.baselineTvl = current;
+        tm.accountedOutflow = 0;
+        emit TvlChecked(vault, current, unexplainedBps, latched);
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -10,7 +10,7 @@ Autonomous DeFi Guardian on **Somnia** (Agentic L1). Submission for the **Somnia
 ## Run
 ```bash
 forge build
-forge test -vv          # 28 tests, all passing
+forge test -vv          # 42 tests, all passing
 forge script script/Deploy.s.sol --rpc-url somnia_testnet --broadcast --private-key $PRIVATE_KEY
 ```
 
@@ -20,6 +20,18 @@ Multi-tenant three-tier security layer. Somnia Agent calls are **async** (reques
   `>= hardBps` OR windowed velocity `>= rapidBps`), blocks blatant drains same-block by returning
   false (vault reverts). Does NOT latch `paused` — reverting the trigger tx would roll the latch
   back anyway. The per-protocol thresholds (`hardBps/rapidBps/greyBps/risk`) ARE the policy brain.
+- **Tier 1c** (`_spotPriceOk`, opt-in `setSpotGuard`): synchronous spot-price deviation guard. If
+  the vault exposes `spotPrice()`, reads it inline and returns false (atomic block) when divergence
+  from `referencePrice` `>= maxDeviationBps`. The only tier fast enough to stop an **atomic
+  flash-loan** price manipulation (async AI is always a block too late). Default-off.
+- **Tier 1d** (`_outflowBudgetOk`, opt-in `setOutflowBudget`): vault-wide cumulative outflow budget.
+  Aggregates outflow across **all** users in a window and atomically blocks once the vault bled
+  `budgetBps` of window-start TVL — closes the **sybil slow-drain** gap the per-user velocity tier
+  can't see. Sync, never latches. Default-off.
+- **TVL-drop detector** (`checkTvlDrop`, opt-in `setTvlMonitor`): catches drains that **bypass the
+  withdrawal hook** (other buggy fn, direct transfer). Samples `totalAssets()`; latches in a
+  separate execution when TVL falls MORE than the guarded outflow recorded since baseline. Wire to
+  cron or the reactive monitor. Default-off.
 - **Tier 2** (`_escalateToAI` → `handleResponse`): grey-zone activity (`>= greyBps`) escalated to
   Somnia **LLM Inference agent** (`inferNumber`, 0–100 risk score). Validators reach consensus;
   callback latches the breaker if score `>= risk`.

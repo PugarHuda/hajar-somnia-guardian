@@ -17,11 +17,14 @@ threat model, the deliberate safety choices, and the known limitations — hones
 | Tier | On failure | Direction |
 |------|-----------|-----------|
 | 1 — hard rule | Reverts the withdrawal (per-tx); never latches (a revert would roll a latch back) | **fail-safe** (blocks) |
+| 1c — spot-price guard | Reverts the withdrawal in-tx when the vault's `spotPrice()` diverges ≥ tolerance; opt-in | **fail-safe** (blocks) |
+| 1d — outflow budget | Reverts once vault-wide cumulative outflow ≥ `budgetBps` of window-start TVL; opt-in, never latches | **fail-safe** (blocks) |
 | 2 — LLM risk | If underfunded / no consensus / non-Success → does **not** block, emits a verdict | **fail-open** (availability) |
 | 2b — price oracle | Divergence ≥ threshold latches; bad/empty response → no alarm | fail-open |
 | 2c — threat intel | High score latches; failed scrape → no latch (Parse-Website consensus is unreliable today) | **fail-safe on action** |
 | 2d — remediation | Latches **only** on a decoded `pause()` tool call; anything else → no action | **fail-closed on action** |
 | 3 — reactivity | Validator-triggered latch in a separate execution | fail-safe |
+| TVL-drop detector | Latches in a separate execution when TVL falls MORE than the guarded outflow we recorded; opt-in | **fail-safe on action** |
 
 The split is deliberate: a withdrawal must never be *blocked by accident* (Tier-1/2 fail open on
 infra problems), but the breaker must never *latch by accident* (Tier-2d/3 fail closed on action).
@@ -46,6 +49,32 @@ infra problems), but the breaker must never *latch by accident* (Tier-2d/3 fail 
 - **Two-step ownership** for the guardian owner role (no accidental transfer to a wrong/dead key).
 - **Reentrancy:** `ProtectedVault` follows checks-effects-interactions (balance/TVL decremented
   before the external transfer); covered by `test_Reentrancy_CannotDrainOthers`.
+
+## Exploit coverage — what Hajar actually catches (honest)
+
+Hajar detects exploits **by their effect on fund outflow**, not by their technique. Most exploits
+end in an abnormal outflow, so this is broad — but the boundary matters and we state it plainly.
+
+| Attack pattern | Caught by | Notes |
+|----------------|-----------|-------|
+| Single-tx drain (≥ `hardBps` of TVL) | Tier-1 | synchronous, same-block revert |
+| Looped / rapid drain (one user, cumulative ≥ `rapidBps`) | Tier-1 velocity | windowed per-user |
+| **Slow drain sprayed across many sybil addresses** (each under per-user limit) | **Tier-1d outflow budget** | aggregate, vault-wide — closes the sybil gap |
+| Grey-zone suspicious withdrawal (15–40%) | Tier-2 LLM | validator-consensus risk score |
+| Oracle manipulation / depeg (out-of-band) | Tier-2b price | async JSON price vs reference |
+| **Atomic flash-loan price manipulation (same tx)** | **Tier-1c spot guard** | only works if the protocol exposes `spotPrice()`; the sole tier fast enough for an atomic attack |
+| **Drain that bypasses the withdrawal hook** (other buggy fn, direct transfer) | **TVL-drop detector** | catches unexplained TVL loss; latches in a separate execution |
+| Known-exploit / active-incident intel | Tier-2c threat | self-updating threat feed |
+
+### Still out of Hajar's reach (architectural, not laziness)
+
+- **A truly atomic drain via a non-withdraw path** can't be *prevented* in the same tx (the
+  guardian isn't on that code path) — the TVL-drop detector catches it *after the fact* and latches
+  to stop the next action, but value already lost in that single tx is gone.
+- **Logic / accounting bugs, governance takeover, access-control flaws, signature/approval abuse**
+  that don't move value out of the vault in an abnormal pattern are **outside the model**. Hajar is a
+  circuit breaker on abnormal outflow, not a formal-verification or internal-accounting auditor.
+  Treat it as defense-in-depth alongside audits, not a replacement.
 
 ## Known limitations (honest)
 
