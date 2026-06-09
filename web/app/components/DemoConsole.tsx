@@ -234,6 +234,9 @@ function describe(name: string, a: any): string {
       case "RemediationVerdict": return `AI remediation: finishReason "${a.finishReason || "stop"}"${a.acted ? " → AI PAUSED protocol" : " → AI judged safe, no action"}`;
       case "CircuitBreakerTripped": return `breaker tripped (${a.reason})`;
       case "CircuitBreakerReset": return `breaker reset → ACTIVE`;
+      case "OutflowBudgetBlocked": return `Tier-1d blocked ${short(a.user)} — vault-wide outflow ${Number(a.cumBps) / 100}% of TVL`;
+      case "SpotPriceBlocked": return `Tier-1c blocked ${short(a.user)} — spot price ${Number(a.divergenceBps) / 100}% off reference (atomic)`;
+      case "TvlChecked": return `TVL-drop scan: ${fmt(a.currentTvl)} STT · ${Number(a.unexplainedBps) / 100}% unexplained${a.latched ? " → TRIPPED" : " → clear"}`;
       default: return name;
     }
   } catch {

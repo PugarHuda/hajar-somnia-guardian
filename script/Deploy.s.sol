@@ -28,6 +28,17 @@ contract Deploy is Script {
 
         vault.setGuardian(address(guardian));
         guardian.registerProtocol(address(vault), 0, 0, 0, 0);
+
+        // Turn the opt-in hardening tiers ON for the demo vault so they're live out of the box:
+        //  - vault-wide outflow budget: 70% of TVL may leave per window across ALL users combined
+        //    (sits above the 60% per-user velocity cap, so it specifically catches distributed/sybil
+        //    drains the per-user tier can't see).
+        //  - TVL-drop detector: latch on a >= 20% drop not explained by guarded outflow.
+        // Spot-price guard is left OFF: ProtectedVault exposes no spotPrice(); it's for real
+        // protocols that have an on-chain quote (enable via setSpotGuard).
+        guardian.setOutflowBudget(address(vault), 7_000);
+        guardian.setTvlMonitor(address(vault), 2_000);
+
         if (fundAmount > 0) guardian.fund{value: fundAmount}();
 
         vm.stopBroadcast();

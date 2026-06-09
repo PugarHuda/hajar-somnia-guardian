@@ -28,11 +28,19 @@ in-flight transaction on an AI verdict. Hajar embraces that with a layered desig
 | Tier | Path | When | What it does |
 |------|------|------|--------------|
 | **1 — Hard rule** | Synchronous, same-block, no AI | Every withdrawal | A deterministic rule (single-tx drain ≥ `hardBps`, or looped *velocity* drain ≥ `rapidBps` within the window) **reverts** blatant attacks instantly. Re-evaluated each call, so it re-blocks every retry. |
+| **1c — Spot-price guard** | Synchronous, same-block, no AI | Every withdrawal (opt-in) | Reads the protocol's own `spotPrice()` **inline** and atomically reverts when it diverges from the reference beyond `maxDeviationBps`. The only tier fast enough to stop an **atomic flash-loan** price manipulation (async AI is always a block too late). Fails open if the price is unreadable. |
+| **1d — Outflow budget** | Synchronous, same-block, no AI | Every withdrawal (opt-in) | Aggregates outflow across **all** users in a window and reverts once the vault has bled `budgetBps` of TVL — closing the **sybil slow-drain** gap (many addresses each under the per-user limit). |
 | **2 — AI judgment** | Async, Somnia **LLM Inference** agent (`inferNumber`) | Grey-zone activity (`>= greyBps` of TVL) | Validators run Qwen3-30B deterministically and reach **consensus** on a 0–100 risk score. If `>= risk`, Hajar **latches** the circuit breaker, pausing all withdrawals. |
 | **2b — Price oracle** | Async, Somnia **JSON API** agent (`fetchUint`) | On demand / scheduled | Fetches the real market price from a public endpoint and compares it to the protocol's reference price. A divergence `>= maxDivergenceBps` latches the breaker — catching **oracle manipulation / depeg** the velocity & LLM tiers can't see. |
 | **2c — Threat intel** | Async, Somnia **Parse Website** agent (`ExtractANumber`) + JSON API | Scheduled (cron) | Scrapes a security/advisory page (or polls a threat-intel API) for a 0–100 threat score. A high score latches the breaker, so the guardian **continuously learns** about new exploit patterns. |
 | **2d — Autonomous remediation** | Async, Somnia **LLM tools-chat** (`inferToolsChat`) | On demand | The agent is given an on-chain tool (`pause()`) and **decides whether to act**, not just score. If it returns a tool call, the callback latches the breaker. The AI takes autonomous on-chain action — verified by validator consensus. (Safe by design: the only consequence is a pause an admin can reset; raw agent calldata is never executed.) |
 | **3 — Reactivity latch** | Event-driven, **validator-triggered** | On the vault's `Withdrawn` event | A real Somnia Reactivity subscription fires in a *separate* execution and can latch the breaker persistently — the one thing the synchronous Tier-1 path cannot do. |
+| **TVL-drop detector** | Separate execution (`checkTvlDrop`) | Scheduled / reactive | Samples the vault's reported TVL and latches when it falls **more than the guarded outflow** the guardian actually saw — catching drains that **bypass the withdrawal hook** entirely (a bug in another function, a direct transfer). |
+
+> **Operating autonomously, 24/7.** Tier-3 is fully on-chain autonomous (no keeper). The proactive
+> tiers that must be *initiated* by a transaction (threat scan, AI risk check, TVL-drop sample) are
+> driven with no human in the loop by [`.github/workflows/autonomous-guardian.yml`](.github/workflows/autonomous-guardian.yml):
+> a gas-only TVL heartbeat every 2h plus a daily validator-paid threat/risk refresh.
 
 ```
                          ┌──────────────────────────────────────────────┐

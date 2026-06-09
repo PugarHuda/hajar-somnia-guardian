@@ -107,6 +107,22 @@ export const guardianAbi = [
     { type: "address", name: "vault", indexed: true },
     { type: "string", name: "finishReason", indexed: false },
     { type: "bool", name: "acted", indexed: false }] },
+  // Hardening tiers (guardian v4+): outflow budget, spot-price guard, TVL-drop detector.
+  { type: "function", name: "checkTvlDrop", stateMutability: "nonpayable", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
+  { type: "event", name: "OutflowBudgetBlocked", inputs: [
+    { type: "address", name: "vault", indexed: true },
+    { type: "address", name: "user", indexed: true },
+    { type: "uint256", name: "cumBps", indexed: false }] },
+  { type: "event", name: "SpotPriceBlocked", inputs: [
+    { type: "address", name: "vault", indexed: true },
+    { type: "address", name: "user", indexed: true },
+    { type: "uint256", name: "spotPrice", indexed: false },
+    { type: "uint256", name: "divergenceBps", indexed: false }] },
+  { type: "event", name: "TvlChecked", inputs: [
+    { type: "address", name: "vault", indexed: true },
+    { type: "uint256", name: "currentTvl", indexed: false },
+    { type: "uint256", name: "unexplainedBps", indexed: false },
+    { type: "bool", name: "latched", indexed: false }] },
 ] as const;
 
 export const vaultAbi = [

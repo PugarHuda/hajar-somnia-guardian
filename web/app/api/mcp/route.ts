@@ -14,8 +14,11 @@ export async function GET(request: Request) {
     name: "hajar-guardian",
     version: "1.0.0",
     description:
-      "Autonomous DeFi guardian on Somnia. Query a protocol's live circuit-breaker status, " +
-      "thresholds, protected TVL, and the Somnia AI agents wired to it.",
+      "Autonomous DeFi guardian on Somnia. Multi-tier defense: synchronous hard/velocity/outflow- " +
+      "budget/spot-price blocks, async AI risk + price-oracle + threat-intel + tools-chat " +
+      "remediation, validator-triggered reactivity, and a TVL-drop detector for bypass-hook " +
+      "drains. Query a protocol's live circuit-breaker status, thresholds, protected TVL, and the " +
+      "Somnia AI agents wired to it.",
     chain: { id: 50312, name: "Somnia Shannon testnet" },
     contracts: {
       guardian: ADDRESSES.guardian,

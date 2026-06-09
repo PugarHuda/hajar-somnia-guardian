@@ -1,0 +1,85 @@
+name: autonomous-guardian
+
+# Hajar's off-chain keeper. Somnia's Reactivity subscription (Tier-3) already gives Hajar ON-CHAIN
+# autonomy (a withdrawal validator-triggers the subscriber with no keeper). This workflow adds the
+# operational autonomy for the PROACTIVE tiers that must be initiated by a tx: it drives the guardian
+# on a schedule, with no human in the loop, so Hajar keeps watching even when nobody is interacting.
+#
+# Two cadences, chosen around STT cost:
+#   - heartbeat  (every 2h): checkTvlDrop(vault) — GAS-ONLY (no validator fee), so it can run often.
+#                            Catches drains that bypass the withdrawal hook by sampling TVL.
+#   - deep-scan  (daily):    requestThreatScanJson + requestRiskCheck — these pay validators (STT),
+#                            so they run once a day to refresh threat intel + an AI risk opinion.
+#
+# Setup (repo Settings):
+#   Secrets:   GUARDIAN_KEY            = a funded admin/monitor private key (testnet throwaway)
+#   Variables: GUARDIAN_ADDRESS        = HajarGuardian address (v4 for checkTvlDrop; v3 works for scans)
+#              VAULT_ADDRESS           = protected vault address
+#              SOMNIA_RPC              = https://dream-rpc.somnia.network
+#
+# All steps are continue-on-error: the contracts themselves fail open (emit EscalationSkipped when
+# underfunded), and a missing function on an older guardian must not fail the run.
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"   # heartbeat — every 2 hours
+    - cron: "15 3 * * *"    # deep-scan — once daily at 03:15 UTC
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which job to run on demand"
+        type: choice
+        default: heartbeat
+        options: [heartbeat, deep-scan]
+
+env:
+  RPC: ${{ vars.SOMNIA_RPC }}
+  GUARDIAN: ${{ vars.GUARDIAN_ADDRESS }}
+  VAULT: ${{ vars.VAULT_ADDRESS }}
+
+jobs:
+  heartbeat:
+    # cron heartbeat, or a manual dispatch asking for heartbeat
+    if: github.event_name == 'schedule' && github.event.schedule == '0 */2 * * *' || github.event.inputs.mode == 'heartbeat'
+    name: TVL-drop surveillance (gas-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Preflight — addresses present
+        run: |
+          test -n "$GUARDIAN" || { echo "::error::GUARDIAN_ADDRESS variable not set"; exit 1; }
+          test -n "$VAULT" || { echo "::error::VAULT_ADDRESS variable not set"; exit 1; }
+          echo "Guardian=$GUARDIAN Vault=$VAULT"
+      - name: checkTvlDrop(vault)
+        continue-on-error: true
+        run: |
+          cast send "$GUARDIAN" "checkTvlDrop(address)" "$VAULT" \
+            --rpc-url "$RPC" --private-key "${{ secrets.GUARDIAN_KEY }}" \
+            --legacy --gas-limit 3000000
+      - name: Read breaker state
+        continue-on-error: true
+        run: |
+          echo "paused = $(cast call "$GUARDIAN" "paused(address)(bool)" "$VAULT" --rpc-url "$RPC")"
+
+  deep-scan:
+    if: github.event_name == 'schedule' && github.event.schedule == '15 3 * * *' || github.event.inputs.mode == 'deep-scan'
+    name: Threat intel + AI risk refresh (pays validators)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Preflight
+        run: |
+          test -n "$GUARDIAN" || { echo "::error::GUARDIAN_ADDRESS variable not set"; exit 1; }
+          test -n "$VAULT" || { echo "::error::VAULT_ADDRESS variable not set"; exit 1; }
+      - name: requestThreatScanJson(vault)
+        continue-on-error: true
+        run: |
+          cast send "$GUARDIAN" "requestThreatScanJson(address)" "$VAULT" \
+            --rpc-url "$RPC" --private-key "${{ secrets.GUARDIAN_KEY }}" \
+            --legacy --gas-limit 6000000
+      - name: requestRiskCheck(vault)
+        continue-on-error: true
+        run: |
+          cast send "$GUARDIAN" "requestRiskCheck(address)" "$VAULT" \
+            --rpc-url "$RPC" --private-key "${{ secrets.GUARDIAN_KEY }}" \
+            --legacy --gas-limit 6000000
