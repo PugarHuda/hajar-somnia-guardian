@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
  * the main users are AIs) can find Hajar and read a protocol's live security posture.
  * Not a full stdio/JSON-RPC MCP server — a read-only HTTP tool catalog.
  */
-export async function GET(request: Request) {
-  const base = new URL(request.url).origin;
+export async function GET() {
+  // Pin to a canonical origin — this manifest is consumed by other agents as a discovery anchor,
+  // so it must not reflect an attacker-controllable Host header.
+  const base = process.env.HAJAR_PUBLIC_ORIGIN ?? "https://hajar-somnia-guardian.vercel.app";
   return NextResponse.json({
     name: "hajar-guardian",
     version: "1.0.0",

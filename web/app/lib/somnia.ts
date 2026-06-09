@@ -24,19 +24,19 @@ export const client = createPublicClient({
 });
 
 export const ADDRESSES = {
-  // Guardian v3 — adds Tier-2d autonomous remediation (inferToolsChat, live-verified)
-  // on top of v2's Tier-2b price oracle + Tier-2c threat intel.
-  guardian: "0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c",
-  vault: "0x237A48d4B05944cC78b2b469F68F1f21D7AdfF39",
-  monitor: "0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502", // real reactivity subscriber (Tier-3, bound to v3)
+  // Guardian v4 — adds the hardening tiers (vault-wide outflow budget, synchronous spot-price
+  // guard, TVL-drop detector) on top of v3's Tier-2d remediation + Tier-2b/2c. via_ir build.
+  guardian: "0xf47D21Afd23639870c5185462B2F418eF59d6F67",
+  vault: "0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043",
+  monitor: "0x5aE10c3c1FE5eCf0b2a44a23E3bB62f7A7deD502", // Tier-3 reactivity subscriber (v3-proven; v4 subscriber pending)
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
 // ERC-8004 Identity Registry where Hajar is registered as a Trustless Agent. Empty until the
 // HajarAgentRegistry is deployed; the agent-card omits on-chain registrations while empty (no fakes).
 export const REGISTRY = {
-  address: "" as string, // set to the deployed HajarAgentRegistry address
-  agentId: 0, // the agentId minted to Hajar on register()
+  address: "0xEa28EDF008A204BFeD65bD093ad5BC219fd35152" as string, // deployed HajarAgentRegistry
+  agentId: 1, // Hajar's ERC-8004 agentId
 } as const;
 
 export const explorer = (addr: string) =>

@@ -13,8 +13,11 @@ export const dynamic = "force-dynamic";
  * other agents can find it (services), pay it (x402Support), and trust it via Somnia's
  * validator-consensus (supportedTrust: crypto-economic).
  */
-export async function GET(request: Request) {
-  const base = new URL(request.url).origin;
+export async function GET() {
+  // The agent-card is a TRUST ANCHOR: other agents read it to learn Hajar's canonical endpoints.
+  // Never derive the origin from the inbound request (Host header is attacker-controllable and the
+  // response is cacheable) — pin it to a server-configured canonical origin.
+  const base = process.env.HAJAR_PUBLIC_ORIGIN ?? "https://hajar-somnia-guardian.vercel.app";
 
   // ERC-8004 registrations point at an on-chain Identity Registry: {namespace}:{chainId}:{registry}.
   // Populated once the HajarAgentRegistry is deployed (REGISTRY.address / REGISTRY.agentId).
@@ -58,5 +61,5 @@ export async function GET(request: Request) {
       "threat-intelligence",
       "autonomous-remediation",
     ],
-  });
+  }, { headers: { "Cache-Control": "no-store" } });
 }
