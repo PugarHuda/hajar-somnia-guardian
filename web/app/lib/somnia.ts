@@ -147,6 +147,29 @@ export const learnerAbi = [
     ],
   },
   { type: "function", name: "highestThreat", stateMutability: "view", inputs: [], outputs: [{ type: "string" }, { type: "uint8" }] },
+  { type: "event", name: "LearnRequested", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "bytes32", name: "category", indexed: true },
+    { type: "uint8", name: "kind", indexed: false }] },
+  { type: "event", name: "Learned", inputs: [
+    { type: "bytes32", name: "category", indexed: true },
+    { type: "uint8", name: "level", indexed: false },
+    { type: "uint32", name: "observations", indexed: false },
+    { type: "uint256", name: "validatorCount", indexed: false }] },
+  { type: "event", name: "Classified", inputs: [
+    { type: "bytes32", name: "category", indexed: true },
+    { type: "string", name: "name", indexed: false },
+    { type: "uint32", name: "observations", indexed: false }] },
+  { type: "event", name: "ScanSkipped", inputs: [
+    { type: "bytes32", name: "category", indexed: true },
+    { type: "string", name: "reason", indexed: false }] },
+] as const;
+
+export const registryAbi = [
+  { type: "function", name: "ownerOf", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }] },
+  { type: "function", name: "tokenURI", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "string" }] },
+  { type: "function", name: "totalAgents", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
 ] as const;
 
 export const vaultAbi = [

@@ -125,6 +125,51 @@ h1 { font-size: 30px; letter-spacing: -0.02em; }
 .foot a { color: var(--accent-2); text-decoration: none; }
 .refresh { font-size: 12px; color: var(--muted); margin-top: 10px; }
 
+/* ---- multi-page nav ---- */
+.nav {
+  position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);
+  background: rgba(10,11,15,0.72); border-bottom: 1px solid var(--border);
+}
+.nav-inner { max-width: 960px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.nav-logo { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 15px; text-decoration: none; color: var(--text); }
+.nav-logo .logo { width: 28px; height: 28px; border-radius: 8px; font-size: 15px; }
+.nav-links { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.nav-links a {
+  color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 600;
+  padding: 6px 11px; border-radius: 8px; transition: color .15s, background .15s;
+}
+.nav-links a:hover { color: var(--text); background: var(--panel); }
+.nav-links a.active { color: var(--accent-2); background: var(--panel); }
+
+.page-head { margin-top: 8px; }
+.page-head h2 { font-size: 26px; letter-spacing: -0.02em; }
+.page-head .sub { color: var(--muted); margin-top: 10px; font-size: 15px; line-height: 1.6; max-width: 680px; }
+
+/* ---- agent cards ---- */
+.agent-grid { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.agent-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+.agent-card .an { font-size: 16px; font-weight: 700; }
+.agent-card .ai { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+.agent-card .ad { color: var(--text); opacity: 0.82; font-size: 13.5px; line-height: 1.5; margin-top: 10px; }
+.agent-card .am { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 11px; font-family: ui-monospace, monospace; color: var(--accent-2); background: #0e1a20; border: 1px solid #1d3a4d; border-radius: 6px; padding: 2px 7px; }
+.chip.live { color: var(--green); background: #0e201a; border-color: #1d4d3a; }
+
+/* ---- knowledge base grid ---- */
+.kb { margin-top: 16px; display: grid; gap: 10px; }
+.kb-row { display: grid; grid-template-columns: 200px 1fr 120px; gap: 14px; align-items: center;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px 16px; }
+.kb-name { font-weight: 600; font-size: 14px; }
+.kb-bar { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.kb-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--green), var(--amber), var(--red)); }
+.kb-meta { font-size: 12px; color: var(--muted); text-align: right; }
+
+.callout { margin-top: 18px; background: #0e1a20; border: 1px solid #1d3a4d; border-radius: 12px; padding: 14px 16px; color: var(--text); font-size: 13.5px; line-height: 1.6; }
+.callout strong { color: var(--accent-2); }
+
 @media (max-width: 720px) {
   .statusbar { grid-template-columns: 1fr; }
+  .agent-grid { grid-template-columns: 1fr; }
+  .kb-row { grid-template-columns: 1fr; gap: 8px; }
+  .nav-links { width: 100%; margin-left: 0; }
 }
