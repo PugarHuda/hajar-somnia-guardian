@@ -10,7 +10,7 @@ Autonomous DeFi Guardian on **Somnia** (Agentic L1). Submission for the **Somnia
 ## Run
 ```bash
 forge build
-forge test -vv          # 42 tests, all passing
+forge test -vv          # 78 tests, all passing
 forge script script/Deploy.s.sol --rpc-url somnia_testnet --broadcast --private-key $PRIVATE_KEY
 ```
 

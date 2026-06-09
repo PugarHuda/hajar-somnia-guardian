@@ -126,7 +126,7 @@ it *is* a discoverable ERC-8004 agent other agents can find and verify, and it *
 
 ```bash
 forge build
-forge test -vv     # 51 passing tests: all tiers, hardening (outflow budget, spot-price
+forge test -vv     # 78 passing tests: all tiers, hardening, self-learning, ERC-8004 registry,
                    # guard, TVL-drop detector), ERC-8004 registry, price oracle, threat intel,
                    # autonomous remediation, pause/reset, whitelist, multi-tenant, fuzz, auth
 ```
@@ -237,7 +237,7 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 - [x] Proactive autonomous monitoring (`requestRiskCheck`) for 24/7 AI health checks
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] `ISomniaAgents` reconciled to the live ABI; real agent ids wired
-- [x] **33 passing tests** (incl. fuzz, reentrancy, multi-tenant isolation, tools-chat remediation)
+- [x] **78 passing tests** (unit + integration + edge + fuzz · see QA_REPORT.md)
 - [x] Tier-2d autonomous remediation (`inferToolsChat`) — **deployed + verified live** (selector
       `0xd0683905` test-locked; consensus reached; AI declined to act on a healthy vault)
 - [x] All tiers deployed + live-verified on Somnia testnet (real validator consensus):

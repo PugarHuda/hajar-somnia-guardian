@@ -116,11 +116,11 @@ const SLIDES: Slide[] = [
     body: (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, maxWidth: 860 }}>
         {[
-          ["Guardian v4", "all tiers + hardening, on-chain"],
-          ["ERC-8004 registry", "Hajar = agentId 1, verified"],
-          ["Threat learner", "market-stress=10 learned live"],
-          ["Autonomous keeper", "24/7 cron, no human"],
-          ["60 tests", "0 failing · fuzz · reentrancy"],
+          ["Guardian v4", "9 tiers live + Tier-3 verified (+20 blocks)"],
+          ["ERC-8004 registry", "Hajar = agentId 1, verified on-chain"],
+          ["Threat learner", "market-stress=10 learned by consensus"],
+          ["Autonomous keeper", "24/7 cron, no human in the loop"],
+          ["78 tests", "0 failing · fuzz · integration · edge"],
           ["0 mocks in prod", "every value read on-chain"],
         ].map(([t, d]) => (
           <div key={t} style={cardS}>

@@ -65,7 +65,7 @@ export default function Landing() {
         <div className="statline">
           <div className="stat framed"><div className="n">9</div><div className="l">defense tiers</div></div>
           <div className="stat framed"><div className="n">3</div><div className="l">Somnia agents</div></div>
-          <div className="stat framed"><div className="n">60</div><div className="l">tests passing</div></div>
+          <div className="stat framed"><div className="n">78</div><div className="l">tests passing</div></div>
           <div className="stat framed"><div className="n">100%</div><div className="l">on-chain, no mocks</div></div>
         </div>
       </section>
