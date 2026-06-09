@@ -139,6 +139,14 @@ export default function AgentLab() {
 
       <div className="feed">
         <div className="feed-title">Live agent activity · guardian + learner · validator-verified on-chain</div>
+        <div className="callout" style={{ marginTop: 0, marginBottom: 14, fontSize: 14 }}>
+          <strong>What you&apos;re watching:</strong> a{" "}
+          <span className="badge gray">request</span> is Hajar asking a Somnia agent (the guardian pays
+          the validators); a <span className="badge cyan">verdict</span> is the consensus answer
+          coming back on-chain; <span className="badge green">learned</span> means the threat brain
+          recorded new intel; <span className="badge red">tripped</span> means the AI latched the
+          breaker. Click any row to open its transaction.
+        </div>
         {feed.length === 0 ? (
           <div className="feed-empty">Watching the chain… trigger an agent above, or wait for the autonomous keeper. Every line below is a real Somnia-agent request or a consensus verdict, linked to its tx.</div>
         ) : (

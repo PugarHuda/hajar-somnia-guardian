@@ -70,6 +70,35 @@ export default function Landing() {
         </div>
       </section>
 
+      <div className="section-title">Try it — 3 ways</div>
+      <div className="agent-grid">
+        <div className="agent-card">
+          <div className="an" style={{ color: "var(--accent-2)" }}>1 · Just browse</div>
+          <div className="ad">
+            No wallet needed. Everything on this site is read <strong>live from the chain</strong> —
+            the breaker, the protected TVL, and the threat knowledge base Hajar learned by itself.
+            Start at <Link href="/intelligence">Intelligence</Link> to see <strong>market-stress = 10</strong>,
+            learned via validator consensus.
+          </div>
+        </div>
+        <div className="agent-card">
+          <div className="an" style={{ color: "var(--accent-2)" }}>2 · Make an agent run</div>
+          <div className="ad">
+            Connect a wallet on <Link href="/agents">AI Agents</Link>, click <em>“Make an AI agent run”</em>,
+            and watch the validator-consensus verdict stream in. Need test STT? Grab some from the{" "}
+            <a href="https://testnet.somnia.network/" target="_blank" rel="noreferrer">Somnia faucet</a>{" "}
+            (chain 50312) — the Connect button auto-adds the network.
+          </div>
+        </div>
+        <div className="agent-card">
+          <div className="an" style={{ color: "var(--accent-2)" }}>3 · Drive the defense</div>
+          <div className="ad">
+            On <Link href="/defense">Defense</Link>: deposit, then try an 80%-of-TVL drain (reverts
+            instantly), trigger the AI, or reset the breaker — every tier is interactive and live.
+          </div>
+        </div>
+      </div>
+
       <div className="section-title">Choose your path</div>
       <div className="agent-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         {PAGES.map((p) => (
