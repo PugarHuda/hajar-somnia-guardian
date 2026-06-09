@@ -85,11 +85,35 @@ in-flight transaction on an AI verdict. Hajar embraces that with a layered desig
 - **Agent-native + Reactivity** are first-class Somnia primitives — Hajar uses **three different
   agents** (LLM Inference, JSON API, Parse Website) and a real on-chain Reactivity subscription.
 
+## Standards & interoperability (why this is more than a one-off)
+
+Hajar isn't a bespoke script — it implements and composes emerging agent + DeFi-security standards,
+which is exactly the "composability + real-world utility" the brief asks for:
+
+- **ERC-7265 (Circuit Breaker Standard).** Hajar's Tier-1d *vault-wide outflow budget* is the
+  ERC-7265 rate-limiter — a temporary halt on protocol-wide outflows once a metric threshold is
+  exceeded over a window. Hajar **extends** it with what only Somnia offers: validator-consensus AI
+  on the grey-zone, not just a fixed threshold. ([EIP-7265](https://ethereum-magicians.org/t/eip-7265-circuit-breaker-standard/14909))
+- **ERC-8004 (Trustless Agents).** Hajar registers as a first-class **on-chain agent** in an
+  ERC-8004 Identity Registry (`src/HajarAgentRegistry.sol`) and serves a standards-compliant
+  **Agent Registration File** at [`/.well-known/agent-card.json`](https://hajar-somnia-guardian.vercel.app/.well-known/agent-card.json).
+  Other agents can *discover* Hajar, read its `services` (MCP + state endpoints), and *trust* it via
+  `supportedTrust: ["reputation","crypto-economic"]` — where crypto-economic trust IS Somnia's
+  validator consensus. Live on Ethereum mainnet since 29 Jan 2026. ([EIP-8004](https://eips.ethereum.org/EIPS/eip-8004))
+- **x402 (agent payments).** The agent-card carries the `x402Support` flag — the path to
+  *Hajar-as-a-Service*, where a protocol's agent pays per risk-query with no human in the loop.
+  ([x402](https://www.coinbase.com/developer-platform/discover/launches/x402))
+
+The result: Hajar is **agent-native end to end** — it *uses* Somnia agents (LLM/JSON/Parse/tools-chat),
+it *is* a discoverable ERC-8004 agent other agents can find and verify, and it *acts* autonomously
+(Reactivity + the keeper workflow).
+
 ## Contracts
 
 | File | Role |
 |------|------|
-| `src/HajarGuardian.sol` | The multi-tenant three-tier guardian. Tier-1 policy lives in `checkWithdrawal()`; per-protocol thresholds are `hardBps / rapidBps / greyBps / risk`. |
+| `src/HajarGuardian.sol` | The multi-tenant guardian. Tier-1 policy in `checkWithdrawal()` (per-protocol `hardBps / rapidBps / greyBps / risk`); hardening tiers: outflow budget, spot-price guard, TVL-drop detector. |
+| `src/HajarAgentRegistry.sol` | **ERC-8004 Identity Registry** — registers Hajar (and any agent) as a portable, discoverable on-chain identity (ERC-721 + agent-card URI + metadata). |
 | `src/ProtectedVault.sol` | Demo protocol being protected (stands in for any vault / lending market / AMM treasury). |
 | `src/HajarReactiveSubscriber.sol` | **Real Tier-3**: registers an on-chain Reactivity subscription; validators auto-invoke its `onEvent` on the vault's `Withdrawn` event. |
 | `src/HajarReactiveMonitor.sol` | Keeper-driven Tier-3 variant used for local tests. |

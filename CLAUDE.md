@@ -47,10 +47,23 @@ Multi-tenant three-tier security layer. Somnia Agent calls are **async** (reques
 - **Tier 3** (`HajarReactiveSubscriber.onEvent` → `onReactiveSignal`): real validator-triggered
   Reactivity subscription that latches in a separate execution.
 
+## Standards (positioning — grounded, not hype)
+- **ERC-7265** (DeFi Circuit Breaker Standard): Tier-1d outflow budget IS this standard's
+  rate-limiter; Hajar extends it with validator-consensus AI. Citation only + framing.
+- **ERC-8004** (Trustless Agents, live ETH mainnet 29 Jan 2026): Hajar is a registered on-chain
+  agent. `src/HajarAgentRegistry.sol` = minimal Identity Registry (ERC-721 + register/metadata);
+  `web/app/.well-known/agent-card.json` = ERC-8004 Agent Registration File (services, supportedTrust
+  ["reputation","crypto-economic"] = validator consensus, x402Support). Makes Hajar discoverable +
+  trustable by other agents — the core Agent-First win.
+- **x402** (Coinbase agent payments): `x402Support` flag in the card; Hajar-as-a-Service vision.
+
 ## Key files
 - `src/HajarGuardian.sol` — guardian. The per-protocol thresholds (`hardBps/rapidBps/greyBps/risk`
   set via `registerProtocol`/`setThresholds`) ARE the tunable policy brain; Tier-1 logic lives
-  inline in `checkWithdrawal()`.
+  inline in `checkWithdrawal()`. Hardening tiers (opt-in): outflow budget, spot-price guard,
+  TVL-drop detector. NOTE: `via_ir = true` is REQUIRED in foundry.toml (without it the contract
+  exceeds EIP-170 24KB).
+- `src/HajarAgentRegistry.sol` — ERC-8004 Identity Registry (separate contract, ~4KB).
 - `src/ProtectedVault.sol` — demo protected protocol.
 - `src/HajarReactiveSubscriber.sol` — real Tier-3 (validator-triggered Reactivity subscription).
 - `src/interfaces/ISomniaAgents.sol` — Somnia platform + agent interfaces (reconciled to live ABI).

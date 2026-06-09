@@ -32,6 +32,13 @@ export const ADDRESSES = {
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
+// ERC-8004 Identity Registry where Hajar is registered as a Trustless Agent. Empty until the
+// HajarAgentRegistry is deployed; the agent-card omits on-chain registrations while empty (no fakes).
+export const REGISTRY = {
+  address: "" as string, // set to the deployed HajarAgentRegistry address
+  agentId: 0, // the agentId minted to Hajar on register()
+} as const;
+
 export const explorer = (addr: string) =>
   `https://shannon-explorer.somnia.network/address/${addr}`;
 export const txExplorer = (hash: string) =>
