@@ -9,11 +9,14 @@ import { useEffect, useState, useCallback } from "react";
 
 type Slide = { kicker?: string; title: string; body: React.ReactNode };
 
-const C = { bg: "#07090c", panel: "#0e131a", ink: "#e8eef5", dim: "#8aa0b4", cyan: "#3dd7d0", red: "#ff5d6c", green: "#46d39a", line: "#1c2733" };
+// 8bitcn palette — matches the web (retro green accent, hard mono pixel frames).
+const C = { bg: "#0b0d0e", panel: "#15191b", ink: "#e9eef0", dim: "#8b969b", cyan: "#4ee08a", red: "#ff5b6e", green: "#4ee08a", line: "#e9eef0" };
+const PIX = "var(--font-pixel), 'Press Start 2P', monospace";
+const BODY = "var(--font-body), 'Pixelify Sans', ui-sans-serif, system-ui, sans-serif";
 
-const ulS: React.CSSProperties = { fontSize: 21, color: C.ink, lineHeight: 1.7, maxWidth: 820, display: "flex", flexDirection: "column", gap: 12, listStyle: "none", padding: 0 };
-const cardS: React.CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px" };
-const codeS: React.CSSProperties = { background: "#10202a", color: C.cyan, padding: "1px 6px", borderRadius: 5, fontSize: "0.9em" };
+const ulS: React.CSSProperties = { fontSize: 21, color: C.ink, lineHeight: 1.7, maxWidth: 820, display: "flex", flexDirection: "column", gap: 14, listStyle: "none", padding: 0, fontFamily: BODY };
+const cardS: React.CSSProperties = { background: C.panel, border: "none", borderRadius: 0, padding: "16px 18px", boxShadow: `0 0 0 3px ${C.ink}` };
+const codeS: React.CSSProperties = { background: "#0b0d0e", color: C.green, padding: "1px 6px", borderRadius: 0, fontSize: "0.9em", border: `2px solid ${C.green}`, fontFamily: BODY };
 
 const SLIDES: Slide[] = [
   {
@@ -82,7 +85,7 @@ const SLIDES: Slide[] = [
         <li>A self-updating knowledge loop using <b style={{ color: C.cyan }}>all three Somnia agents</b>:
           Parse Website scrapes security feeds, JSON API pulls structured scores, LLM <code style={codeS}>inferString</code> classifies the pattern.</li>
         <li>Results accumulate in an <b>on-chain knowledge base</b> per exploit category — Hajar stays current.</li>
-        <li style={{ color: C.green }}>Live-proven: it learned <b>market-stress = 10</b> from the Fear &amp; Greed Index via validator consensus, on-chain.</li>
+        <li style={{ color: C.green }}>Live-proven &amp; <b>continuously updating</b>: it learned a market-stress level from the Fear &amp; Greed Index by validator consensus — and <b>re-learned it (10 → 9)</b> as the live index moved, accumulating on-chain.</li>
         <li style={{ color: C.dim, fontSize: 16 }}>Honest scope: knowledge accumulation &amp; adaptation, not model training.</li>
       </ul>
     ),
@@ -181,20 +184,20 @@ export default function Deck() {
     <main
       onClick={() => go(1)}
       style={{ minHeight: "100vh", background: C.bg, color: C.ink, display: "flex", flexDirection: "column",
-        justifyContent: "center", padding: "6vh 8vw", fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif", cursor: "pointer" }}
+        justifyContent: "center", padding: "6vh 8vw", fontFamily: BODY, cursor: "pointer" }}
     >
-      {s.kicker && <div style={{ color: C.cyan, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", fontSize: 13, marginBottom: 18 }}>{s.kicker}</div>}
-      <h1 style={{ fontSize: i === 0 ? 88 : 46, fontWeight: 800, margin: "0 0 26px", letterSpacing: -1, lineHeight: 1.05 }}>{s.title}</h1>
+      {s.kicker && <div style={{ color: C.green, letterSpacing: 1.5, textTransform: "uppercase", fontSize: 11, marginBottom: 22, fontFamily: PIX }}>{s.kicker}</div>}
+      <h1 style={{ fontSize: i === 0 ? 64 : 30, margin: "0 0 28px", lineHeight: 1.4, fontFamily: PIX, color: C.ink }}>{s.title}</h1>
       <div>{s.body}</div>
 
       <div style={{ position: "fixed", bottom: 26, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 8 }}>
         {SLIDES.map((_, k) => (
           <button key={k} onClick={(e) => { e.stopPropagation(); setI(k); }}
-            style={{ width: k === i ? 26 : 8, height: 8, borderRadius: 99, border: "none", cursor: "pointer",
-              background: k === i ? C.cyan : C.line, transition: "all .2s" }} aria-label={`slide ${k + 1}`} />
+            style={{ width: k === i ? 24 : 10, height: 10, borderRadius: 0, border: "none", cursor: "pointer",
+              background: k === i ? C.green : "#2a3033", transition: "all .15s" }} aria-label={`slide ${k + 1}`} />
         ))}
       </div>
-      <div style={{ position: "fixed", bottom: 22, right: 26, color: C.dim, fontSize: 13 }}>{i + 1} / {SLIDES.length} · ← → to navigate</div>
+      <div style={{ position: "fixed", bottom: 20, right: 26, color: C.dim, fontSize: 11, fontFamily: PIX }}>{i + 1}/{SLIDES.length} · ← →</div>
     </main>
   );
 }
