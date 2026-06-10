@@ -68,6 +68,21 @@ await ctx.addInitScript(({ addr }) => {
   window.ethereum = provider;
 }, { addr: account.address });
 
+// Kill the white flash-of-unstyled-page (initial load AND every navigation): paint the dark theme
+// bg from frame 0, before the app's CSS loads.
+await ctx.addInitScript(() => {
+  const paint = () => {
+    const el = document.documentElement;
+    if (el) el.style.background = "#0b0d0e";
+    if (document.body) document.body.style.background = "#0b0d0e";
+    const s = document.createElement("style");
+    s.textContent = "html,body{background:#0b0d0e !important;}";
+    (document.head || document.documentElement).appendChild(s);
+  };
+  paint();
+  document.addEventListener("DOMContentLoaded", paint);
+});
+
 // Inject a VISIBLE cursor (headless Chromium renders none) that follows the mouse + pulses on click.
 await ctx.addInitScript(() => {
   const mk = () => {
@@ -113,14 +128,14 @@ await page.goto(SITE + "/defense", { waitUntil: "domcontentloaded", timeout: 450
 await page.getByRole("button", { name: /connect/i }).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 await page.mouse.move(960, 540, { steps: 10 }); // bring the cursor on-screen
 mark.defense = at();
-await wait(2500);
-await click(/connect/i); await wait(4500);              // connect
+// Pace the actions to seg1's narration: intro (0-6s) -> connect (~6s) -> deposit (~9s) -> drain (~17s).
+await wait(6000);                                       // intro narration plays
+await click(/connect/i); await wait(3000);              // "I connect a wallet" (~6-9s)
 const amt = page.locator("input.inp").first();
-await amt.fill("0.03"); await wait(900);
-await click(/^deposit/i); await wait(12000);            // deposit (real tx)
-await click(/try drain/i); await wait(11000);           // drain -> reverted
-await page.mouse.wheel(0, 350); await wait(3500);       // show the block message
-await click(/reset breaker/i).catch(() => {}); await wait(2500);
+await amt.fill("0.03");
+await click(/^deposit/i); await wait(8000);             // "I deposit… a real transaction… value goes up" (~9-17s)
+await click(/try drain/i); await wait(6000);            // "watch the guardian defend… drain 80%… reverts" (~17-23s)
+await click(/reset breaker/i).catch(() => {}); await wait(2000);
 
 // ===== SECTION 2: INTELLIGENCE (>= seg2 ~14.1s) =====
 await page.goto(SITE + "/intelligence", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
