@@ -62,8 +62,16 @@ export default function AgentsPage() {
           Hajar runs its judgment on <strong>Somnia&apos;s on-chain AI agents</strong>. Each request is
           executed by a subcommittee of validators that reach <strong>consensus</strong>; the verdict
           comes back to the guardian with a receipt and N validator signatures — fully auditable.
-          Below: the three agents, then a live console where you can fire one yourself and watch the
-          consensus verdict land on-chain.
+          Below: the three agents wired into the guardian, then a live lab where you can fire one
+          yourself and watch the consensus verdict land on-chain.
+        </p>
+        <p className="sub" style={{ marginTop: 10 }}>
+          <strong>To trigger an agent:</strong> connect a wallet (Somnia testnet, chain 50312), then
+          click <em>&quot;Make an AI agent run now&quot;</em>. This sends a real 25%-TVL withdrawal —
+          the guardian auto-detects the grey zone and escalates it to the Somnia LLM agent across a
+          validator subcommittee. No wallet? The live feed below still shows every autonomous
+          keeper verdict as it lands.
+          {" "}<a href="https://testnet.somnia.network/" target="_blank" rel="noreferrer" style={{ color: "var(--accent-2)" }}>Need test STT? Faucet →</a>
         </p>
       </div>
 

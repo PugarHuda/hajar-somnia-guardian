@@ -182,6 +182,17 @@ export default function DemoConsole() {
           )}
         </div>
 
+        <div className="callout" style={{ fontSize: 13, marginBottom: 10, marginTop: 0 }}>
+          <strong>Try it in order:</strong>{" "}
+          ① <em>Deposit</em> some STT to seed vault TVL →{" "}
+          ② <em>Try Drain (80%)</em> — Tier-1 reverts it same-block →{" "}
+          ③ <em>Trigger AI (25%)</em> — grey zone, guardian sends to Somnia LLM, watch{" "}
+          <span className="badge gray" style={{ fontSize: 11 }}>EscalatedToAI</span> →{" "}
+          <span className="badge cyan" style={{ fontSize: 11 }}>AIVerdict</span>{" "}
+          stream in below (20–60s, validator consensus). <em>Proactive Check</em> and{" "}
+          <em>Reset Breaker</em> are protocol-admin only — they unlock once you connect the deployer wallet.
+        </div>
+
         <div className="row">
           <input className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.01" inputMode="decimal" />
           <span className="unit">STT</span>
@@ -190,10 +201,10 @@ export default function DemoConsole() {
         </div>
 
         <div className="row wrap">
-          <button className="btn danger" disabled={!!busy} onClick={doDrain}>⚔️ Try Drain (80% TVL)</button>
-          <button className="btn primary" disabled={!!busy} onClick={doEscalate} title="Public — anyone can trigger the Somnia LLM agent">🤖 Trigger AI (25% TVL)</button>
-          <button className="btn" disabled={!!busy || (!!account && !isAdmin)} onClick={doRiskCheck} title={!isAdmin ? "protocol admin only" : ""}>🛰️ Proactive Check{account && !isAdmin ? " (admin)" : ""}</button>
-          <button className="btn ghost" disabled={!!busy || (!!account && !isAdmin)} onClick={doReset} title={!isAdmin ? "protocol admin only" : ""}>♻️ Reset Breaker{account && !isAdmin ? " (admin)" : ""}</button>
+          <button className="btn danger" disabled={!!busy} onClick={doDrain} title="80% of TVL triggers Tier-1 hard rule → instant revert same-block">⚔️ Try Drain (80% TVL)</button>
+          <button className="btn primary" disabled={!!busy} onClick={doEscalate} title="25% TVL = grey zone → guardian sends to Somnia LLM agent, fully public">🤖 Trigger AI (25% TVL)</button>
+          <button className="btn" disabled={!!busy || (!!account && !isAdmin)} onClick={doRiskCheck} title={!account ? "" : !isAdmin ? "Connect the protocol-admin wallet to use this" : "Manually request a Tier-2 AI risk read"}>🛰️ Proactive Check{account && !isAdmin ? " (admin)" : ""}</button>
+          <button className="btn ghost" disabled={!!busy || (!!account && !isAdmin)} onClick={doReset} title={!account ? "" : !isAdmin ? "Connect the protocol-admin wallet to use this" : "Unlatch the circuit breaker after an AI alarm"}>♻️ Reset Breaker{account && !isAdmin ? " (admin)" : ""}</button>
         </div>
 
         {msg && <div className={`msg ${msg.kind}`}>{msg.text}</div>}

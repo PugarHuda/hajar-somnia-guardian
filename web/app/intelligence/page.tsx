@@ -51,7 +51,15 @@ export default function IntelligencePage() {
           Hajar doesn&apos;t just enforce fixed rules — it <strong>keeps learning about exploits from
           the outside world</strong>. An autonomous loop uses all three Somnia agents to read security
           feeds and write what it learns into an on-chain knowledge base, so the guardian stays current
-          with no human in the loop. Read live from the learner contract.
+          with no human in the loop. Everything below is read live from the learner contract —
+          no wallet required.
+        </p>
+        <p className="sub" style={{ marginTop: 8 }}>
+          The knowledge base accumulates via <strong>three Somnia agents</strong>: Parse Website scrapes
+          security feeds (rekt.news, advisories) for a 0–100 threat level per exploit category; JSON
+          API pulls structured scores (live-proven: <strong>market-stress = 10</strong> from the Fear &amp; Greed
+          Index); LLM inferString classifies observed patterns. Each score is written on-chain by
+          validator consensus and builds up over time.
         </p>
       </div>
 

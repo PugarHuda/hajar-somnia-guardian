@@ -126,9 +126,22 @@ export default function AgentLab() {
 
   return (
     <div className="console">
+      <div className="callout" style={{ marginBottom: 16, fontSize: 14 }}>
+        <strong>How it works:</strong> clicking <em>Connect wallet</em> lets you send a real
+        25%-of-TVL withdrawal — a deliberate grey-zone amount the guardian auto-escalates to the
+        Somnia LLM agent across a validator subcommittee. You watch{" "}
+        <span className="badge gray" style={{ fontSize: 12 }}>EscalatedToAI</span> →{" "}
+        <span className="badge cyan" style={{ fontSize: 12 }}>AIVerdict</span>{" "}
+        stream into the live feed below, each linked to its on-chain tx.{" "}
+        <span style={{ color: "var(--muted)" }}>
+          No wallet? The feed still shows live activity from Hajar&apos;s autonomous 24/7 keeper.
+        </span>
+      </div>
       <div className="console-head">
         <div className="acct">
-          {account ? <><span className="dot green" /> {short(account)}</> : <><span className="dot gray" /> wallet not connected</>}
+          {account
+            ? <><span className="dot green" /> {short(account)}</>
+            : <><span className="dot gray" /> wallet not connected — connect to fire an agent yourself</>}
         </div>
       </div>
       <div className="row wrap">
@@ -137,7 +150,7 @@ export default function AgentLab() {
         ) : (
           <button className="btn primary" disabled={busy === "ai"} onClick={triggerAI}>🤖 Make an AI agent run now (25% TVL)</button>
         )}
-        <span className="unit">↳ a grey-zone withdrawal escalates to the Somnia LLM agent — fully public, no admin</span>
+        <span className="unit">↳ 25% TVL sits in the grey zone — guardian auto-escalates, fully public, no admin needed</span>
       </div>
       {msg && <div className={`msg ${msg.kind}`}>{msg.text}</div>}
 

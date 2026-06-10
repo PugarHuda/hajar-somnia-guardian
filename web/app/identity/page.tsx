@@ -28,9 +28,21 @@ export default function IdentityPage() {
         <h2>Agent identity &amp; standards</h2>
         <p className="sub">
           Hajar isn&apos;t just a contract you call — it&apos;s a <strong>discoverable on-chain
-          agent</strong>. It registers as an <strong>ERC-8004 Trustless Agent</strong> so other agents
-          can find it, read what it does, and verify its identity with no pre-existing trust. It also
-          composes the emerging DeFi-security and agent-payment standards.
+          agent</strong>. It registers as an <strong>ERC-8004 Trustless Agent</strong> (agentId 1) so
+          other agents can find it, read what it does, and verify its identity with no pre-existing
+          trust. It also composes the three emerging standards for DeFi security and agent payments
+          below. Everything here is read-only — no wallet required.
+        </p>
+        <p className="sub" style={{ marginTop: 8 }}>
+          <strong>How to verify it yourself:</strong> open the{" "}
+          <a href="/.well-known/agent-card.json" target="_blank" rel="noreferrer" style={{ color: "var(--accent-2)" }}>agent card</a>,
+          then call <code>ownerOf(1)</code> on the{" "}
+          <a href={explorer(REGISTRY.address)} target="_blank" rel="noreferrer" style={{ color: "var(--accent-2)" }}>
+            ERC-8004 registry
+          </a>{" "}
+          — the address matches the deployer. The card&apos;s{" "}
+          <code>registrations[0].contractAddress</code> points back to the guardian, closing the
+          verification loop without any trusted intermediary.
         </p>
       </div>
 
