@@ -114,17 +114,24 @@ const pointer = async (x, y) => {
   await page.mouse.move(x, y, { steps });
   await page.evaluate(([px, py]) => (window).__moveCur && (window).__moveCur(px, py), [x, y]).catch(() => {});
 };
-// Move the cursor to a button's center (you see it travel), pulse, then click.
-const click = async (rx) => {
+// Pre-position the cursor over a button (visible travel, NO click yet) — call during the prior
+// sentence so the cursor is already there when the narration names it.
+const goTo = async (rx) => {
   const b = page.getByRole("button", { name: rx }).first();
   await b.scrollIntoViewIfNeeded();
   const box = await b.boundingBox();
-  if (box) { await pointer(box.x + box.width / 2, box.y + box.height / 2); await wait(450); }
+  if (box) await pointer(box.x + box.width / 2, box.y + box.height / 2);
+  return b;
+};
+// Click a pre-positioned button INSTANTLY (cursor already there) — call exactly when its word is said.
+const tap = async (b) => {
   await page.evaluate(() => (window).__pressCur && (window).__pressCur(true)).catch(() => {});
   await b.click();
-  await wait(150);
+  await wait(140);
   await page.evaluate(() => (window).__pressCur && (window).__pressCur(false)).catch(() => {});
 };
+// (legacy one-shot move+click, still used where exact timing doesn't matter)
+const click = async (rx) => { const b = await goTo(rx); await wait(350); await tap(b); };
 
 console.log("acting as", account.address);
 
@@ -139,15 +146,23 @@ const mark = {};
 await page.goto(SITE + "/defense", { waitUntil: "domcontentloaded", timeout: 45000 });
 await page.getByRole("button", { name: /connect/i }).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 await pointer(760, 300); // bring the cursor on-screen
-mark.defense = at();
-// Pace the actions to seg1's narration: intro (0-6s) -> connect (~6s) -> deposit (~9s) -> drain (~17s).
-await wait(6000);                                       // intro narration plays
-await click(/connect/i); await wait(3000);              // "I connect a wallet" (~6-9s)
+mark.defense = at(); // t=0 of the defense section (seg1 VO plays from demo-time ~0.3s)
+// Click each button EXACTLY when seg1 names it (word timings from edge-tts, +0.3s VO offset):
+//   "I connect a wallet"  4.5-6.5s · "Now I deposit" 6.5-8.9s · "drain eighty percent" 14.6-18.5s
+const bConnect = await goTo(/connect/i);                // travel during the intro (~0.8s)
+await wait(4600);                                       // hold until the "connect a wallet" line
+await tap(bConnect);                                    // click ~5.4s  ✓ on "connect"
 const amt = page.locator("input.inp").first();
 await amt.fill("0.03");
-await click(/^deposit/i); await wait(8000);             // "I deposit… a real transaction… value goes up" (~9-17s)
-await click(/try drain/i); await wait(6000);            // "watch the guardian defend… drain 80%… reverts" (~17-23s)
-await click(/reset breaker/i).catch(() => {}); await wait(2000);
+const bDep = await goTo(/^deposit/i);                   // travel during "Now I deposit"
+await wait(300);
+await tap(bDep);                                        // click ~7.0s  ✓ on "deposit"
+await wait(8200);                                       // deposit tx + "real transaction… now watch the guardian defend"
+const bDrain = await goTo(/try drain/i);                // travel into the "drain" line
+await tap(bDrain);                                      // click ~16.3s ✓ on "drain eighty percent"
+await wait(4200);                                       // "Tier one reverts it instantly… the breaker holds"
+const bReset = await goTo(/reset breaker/i); await tap(bReset);
+await wait(1500);
 
 // ===== SECTION 2: INTELLIGENCE (>= seg2 ~12s) =====
 await page.goto(SITE + "/intelligence", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
