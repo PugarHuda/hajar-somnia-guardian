@@ -9,6 +9,14 @@ const { fontFamily: BODY } = loadBody();
 
 const C = { bg: "#0b0d0e", panel: "#15191b", ink: "#e9eef0", dim: "#8b969b", green: "#4ee08a", line: "#e9eef0" };
 
+const Shield: React.FC<{ size: number }> = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" shapeRendering="crispEdges">
+    <path d="M4 3 H20 V12 L12 22 L4 12 Z" fill={C.green} stroke={C.bg} strokeWidth="2" strokeLinejoin="miter" />
+    <path d="M7 6 H17 V12 L12 18 L7 12 Z" fill="none" stroke={C.bg} strokeWidth="1.4" opacity="0.55" />
+    <path d="M8.5 11.5 L11 14 L15.5 8.5" stroke={C.bg} strokeWidth="2.4" strokeLinecap="square" strokeLinejoin="miter" />
+  </svg>
+);
+
 export const FPS = 30;
 export const totalFrames = SLIDES.reduce((a, s) => a + Math.round(s.seconds * FPS), 0);
 
@@ -27,8 +35,11 @@ const SlideView: React.FC<{ slide: Slide }> = ({ slide }) => {
       {/* subtle scanlines */}
       <AbsoluteFill style={{ background: "repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 4px)", pointerEvents: "none" }} />
 
+      {slide.accentTitle && (
+        <div style={{ ...fadeUp(frame, fps, 0), marginBottom: 28 }}><Shield size={120} /></div>
+      )}
       {slide.kicker && (
-        <div style={{ ...fadeUp(frame, fps, 0), fontFamily: PIXEL, fontSize: 20, color: C.green, letterSpacing: 2, textTransform: "uppercase", marginBottom: 30 }}>
+        <div style={{ ...fadeUp(frame, fps, slide.accentTitle ? 4 : 0), fontFamily: PIXEL, fontSize: 20, color: C.green, letterSpacing: 2, textTransform: "uppercase", marginBottom: 30 }}>
           {slide.kicker}
         </div>
       )}

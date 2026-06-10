@@ -21,7 +21,7 @@ export const SLIDES: Slide[] = [
     accentTitle: true,
   },
   {
-    seconds: 9.4,
+    seconds: 10.0,
     audio: "vo/slide-2.wav",
     kicker: "The problem",
     title: "DeFi bleeds billions, reactively",
@@ -34,7 +34,7 @@ export const SLIDES: Slide[] = [
       "DeFi bleeds billions, reactively. Exploits drain in seconds, audits are one-time, monitoring alerts after the money is gone.",
   },
   {
-    seconds: 13.4,
+    seconds: 14.4,
     audio: "vo/slide-3.wav",
     kicker: "The solution",
     title: "A breaker that thinks and acts",
@@ -47,7 +47,7 @@ export const SLIDES: Slide[] = [
       "Hajar puts the whole loop on-chain: deterministic blocks, consensus AI for the grey zone, reactivity and a learning brain running twenty-four-seven.",
   },
   {
-    seconds: 15.3,
+    seconds: 16.0,
     audio: "vo/slide-4.wav",
     kicker: "Defense in depth",
     title: "Nine tiers — every one live",
@@ -60,7 +60,7 @@ export const SLIDES: Slide[] = [
       "Nine tiers, every one live — hard rules, a flash-loan spot guard, a sybil-drain outflow budget, AI scoring, price and threat checks, autonomous remediation, reactivity, and a bypass-drain detector.",
   },
   {
-    seconds: 16.9,
+    seconds: 17.9,
     audio: "vo/slide-5.wav",
     kicker: "The differentiator",
     title: "It learns exploits — by itself",
@@ -73,7 +73,7 @@ export const SLIDES: Slide[] = [
       "Here's what nobody else has. Hajar learns new exploits through all three Somnia agents and keeps an on-chain knowledge base current. It learned a market-stress level by validator consensus, and re-learned it as the live index moved. Real, and unique.",
   },
   {
-    seconds: 12.1,
+    seconds: 13.1,
     audio: "vo/slide-6.wav",
     kicker: "Agent-native, end to end",
     title: "Uses agents — and IS an agent",
@@ -86,7 +86,7 @@ export const SLIDES: Slide[] = [
       "Hajar uses Somnia's agents, and it is an agent — a registered ERC-8004 Trustless Agent other agents can discover and trust, where trust is Somnia's validator consensus.",
   },
   {
-    seconds: 14.2,
+    seconds: 13.7,
     audio: "vo/slide-7.wav",
     kicker: "Standards, not a one-off",
     title: "ERC-7265 · ERC-8004 · x402",
@@ -99,7 +99,7 @@ export const SLIDES: Slide[] = [
       "It's not a one-off. ERC-7265 the circuit-breaker standard extended with AI, ERC-8004 for agent identity, and x402 for agent payments.",
   },
   {
-    seconds: 11.7,
+    seconds: 11.5,
     audio: "vo/slide-8.wav",
     kicker: "Proof",
     title: "Live & verified on Somnia",
@@ -112,7 +112,7 @@ export const SLIDES: Slide[] = [
       "Guardian, registry, threat learner, reactive subscriber — all deployed and verified. Seventy-eight tests, zero failing, zero mocks.",
   },
   {
-    seconds: 10.9,
+    seconds: 11.9,
     audio: "vo/slide-9.wav",
     kicker: "Why Somnia",
     title: "Only possible on an Agentic L1",
