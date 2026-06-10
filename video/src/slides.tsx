@@ -1,5 +1,6 @@
 export type Slide = {
   seconds: number;
+  audio: string; // VO wav under public/vo/
   kicker?: string;
   title: string;
   bullets: string[];
@@ -10,7 +11,8 @@ export type Slide = {
 // 8bitcn pitch — anchored on self-learning. Captions == VIDEO_SCRIPT.md Part B (word-for-word VO).
 export const SLIDES: Slide[] = [
   {
-    seconds: 6,
+    seconds: 8.5,
+    audio: "vo/slide-1.wav",
     kicker: "SOMNIA AGENTATHON · AGENTIC L1",
     title: "HAJAR",
     bullets: ["Autonomous DeFi Guardian", "AI run inside validator consensus"],
@@ -19,7 +21,8 @@ export const SLIDES: Slide[] = [
     accentTitle: true,
   },
   {
-    seconds: 9,
+    seconds: 9.4,
+    audio: "vo/slide-2.wav",
     kicker: "The problem",
     title: "DeFi bleeds billions, reactively",
     bullets: [
@@ -31,7 +34,8 @@ export const SLIDES: Slide[] = [
       "DeFi bleeds billions, reactively. Exploits drain in seconds, audits are one-time, monitoring alerts after the money is gone.",
   },
   {
-    seconds: 9,
+    seconds: 13.4,
+    audio: "vo/slide-3.wav",
     kicker: "The solution",
     title: "A breaker that thinks and acts",
     bullets: [
@@ -43,7 +47,8 @@ export const SLIDES: Slide[] = [
       "Hajar puts the whole loop on-chain: deterministic blocks, consensus AI for the grey zone, reactivity and a learning brain running twenty-four-seven.",
   },
   {
-    seconds: 9,
+    seconds: 15.3,
+    audio: "vo/slide-4.wav",
     kicker: "Defense in depth",
     title: "Nine tiers — every one live",
     bullets: [
@@ -55,7 +60,8 @@ export const SLIDES: Slide[] = [
       "Nine tiers, every one live — hard rules, a flash-loan spot guard, a sybil-drain outflow budget, AI scoring, price and threat checks, autonomous remediation, reactivity, and a bypass-drain detector.",
   },
   {
-    seconds: 13,
+    seconds: 16.9,
+    audio: "vo/slide-5.wav",
     kicker: "The differentiator",
     title: "It learns exploits — by itself",
     bullets: [
@@ -67,7 +73,8 @@ export const SLIDES: Slide[] = [
       "Here's what nobody else has. Hajar learns new exploits through all three Somnia agents and keeps an on-chain knowledge base current. It learned a market-stress level by validator consensus, and re-learned it as the live index moved. Real, and unique.",
   },
   {
-    seconds: 9,
+    seconds: 12.1,
+    audio: "vo/slide-6.wav",
     kicker: "Agent-native, end to end",
     title: "Uses agents — and IS an agent",
     bullets: [
@@ -79,7 +86,8 @@ export const SLIDES: Slide[] = [
       "Hajar uses Somnia's agents, and it is an agent — a registered ERC-8004 Trustless Agent other agents can discover and trust, where trust is Somnia's validator consensus.",
   },
   {
-    seconds: 8,
+    seconds: 14.2,
+    audio: "vo/slide-7.wav",
     kicker: "Standards, not a one-off",
     title: "ERC-7265 · ERC-8004 · x402",
     bullets: [
@@ -91,7 +99,8 @@ export const SLIDES: Slide[] = [
       "It's not a one-off. ERC-7265 the circuit-breaker standard extended with AI, ERC-8004 for agent identity, and x402 for agent payments.",
   },
   {
-    seconds: 8,
+    seconds: 11.7,
+    audio: "vo/slide-8.wav",
     kicker: "Proof",
     title: "Live & verified on Somnia",
     bullets: [
@@ -103,7 +112,8 @@ export const SLIDES: Slide[] = [
       "Guardian, registry, threat learner, reactive subscriber — all deployed and verified. Seventy-eight tests, zero failing, zero mocks.",
   },
   {
-    seconds: 8,
+    seconds: 10.9,
+    audio: "vo/slide-9.wav",
     kicker: "Why Somnia",
     title: "Only possible on an Agentic L1",
     bullets: [
@@ -115,7 +125,8 @@ export const SLIDES: Slide[] = [
       "Only an Agentic Layer-1 makes this possible — AI inside validator consensus, sub-cent fees to check every withdrawal, and reactivity as a first-class primitive.",
   },
   {
-    seconds: 9,
+    seconds: 8.7,
+    audio: "vo/slide-10.wav",
     kicker: "The ask",
     title: "Protect every protocol",
     bullets: ["Standards-compliant · agent-native · self-learning · live", "hajar-somnia-guardian.vercel.app"],

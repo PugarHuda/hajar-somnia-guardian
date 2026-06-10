@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Series, useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
+import { AbsoluteFill, Series, Audio, staticFile, useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { loadFont as loadPixel } from "@remotion/google-fonts/PressStart2P";
 import { loadFont as loadBody } from "@remotion/google-fonts/PixelifySans";
 import { SLIDES, type Slide } from "./slides";
@@ -23,6 +23,7 @@ const SlideView: React.FC<{ slide: Slide }> = ({ slide }) => {
 
   return (
     <AbsoluteFill style={{ background: C.bg, fontFamily: BODY, padding: "9vh 9vw", justifyContent: "center" }}>
+      <Audio src={staticFile(slide.audio)} />
       {/* subtle scanlines */}
       <AbsoluteFill style={{ background: "repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 4px)", pointerEvents: "none" }} />
 
