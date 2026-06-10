@@ -1,0 +1,22 @@
+{
+  "name": "hajar-pitch-video",
+  "version": "1.0.0",
+  "description": "Code-rendered 8bitcn pitch video for Hajar (Remotion)",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render HajarPitch out/hajar-pitch.mp4",
+    "render:gif": "remotion render HajarPitch out/hajar-pitch.gif --codec=gif"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.290",
+    "@remotion/google-fonts": "4.0.290",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.290"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "typescript": "^5.5.4"
+  }
+}
