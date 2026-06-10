@@ -1,0 +1,1 @@
+Next, the threat brain. On the Intelligence page, Hajar shows what it has learned about exploits. An on-chain knowledge base it keeps current, every threat level scored by validator consensus.

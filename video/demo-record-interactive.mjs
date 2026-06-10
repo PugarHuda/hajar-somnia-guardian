@@ -4,7 +4,7 @@
 // Somnia. The guardian reacts on-chain; the feed + console messages update on camera.
 //
 // Output: out/demo-interactive/<auto>.webm  ->  convert with the npm script.
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { createWalletClient, http, defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -74,35 +74,40 @@ const click = async (rx) => { const b = page.getByRole("button", { name: rx }).f
 
 console.log("acting as", account.address);
 
+// Section waits are tuned >= each VO segment's length so narration never spills into the next page.
+const t0 = Date.now();
+const at = () => Date.now() - t0;
+const mark = {};
+
+// ===== SECTION 1: DEFENSE (>= seg1 ~28.7s) =====
 await page.goto(SITE + "/defense", { waitUntil: "networkidle", timeout: 45000 });
+mark.defense = at();
 await wait(3500);
-
-// 1) Connect the (headless) wallet.
-await click(/connect/i); await wait(4000);
-
-// 2) Deposit a small amount -> real tx -> Deposited shows in the feed.
+await click(/connect/i); await wait(4500);              // connect
 const amt = page.locator("input.inp").first();
-await amt.fill("0.03"); await wait(800);
-await click(/^deposit/i); await wait(11000);
+await amt.fill("0.03"); await wait(900);
+await click(/^deposit/i); await wait(12000);            // deposit (real tx)
+await click(/try drain/i); await wait(11000);           // drain -> reverted
+await page.mouse.wheel(0, 350); await wait(3500);       // show the block message
+await click(/reset breaker/i).catch(() => {}); await wait(2500);
 
-// 3) Try Drain 80% of TVL -> the guardian reverts it instantly (Tier-1). Console shows the block.
-await click(/try drain/i); await wait(10000);
-await page.mouse.wheel(0, 350); await wait(3500); // show the "guardian blocked it" message
-await click(/reset breaker/i).catch(() => {}); await wait(3000);
-
-// 4) Tour the deeper pages so the VO can explain each one.
-// Intelligence — the self-learned threat knowledge base (market-stress).
+// ===== SECTION 2: INTELLIGENCE (>= seg2 ~14.1s) =====
 await page.goto(SITE + "/intelligence", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
-await wait(5000); await page.mouse.wheel(0, 380); await wait(4000); await page.mouse.wheel(0, -380); await wait(800);
+mark.intelligence = at();
+await wait(7000); await page.mouse.wheel(0, 380); await wait(6000); await page.mouse.wheel(0, -380); await wait(1500);
 
-// AI Agents — the 3-agent catalog + the live consensus feed.
+// ===== SECTION 3: AI AGENTS (>= seg3 ~11.1s) =====
 await page.goto(SITE + "/agents", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
-await wait(5000); await page.mouse.wheel(0, 460); await wait(4500); await page.mouse.wheel(0, 300); await wait(3500);
+mark.agents = at();
+await wait(5500); await page.mouse.wheel(0, 460); await wait(6500);
 
-// Identity — Hajar as a registered ERC-8004 agent.
+// ===== SECTION 4: IDENTITY + close (>= seg4 ~19s) =====
 await page.goto(SITE + "/identity", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
-await wait(5000); await page.mouse.wheel(0, 350); await wait(4000);
+mark.identity = at();
+await wait(9000); await page.mouse.wheel(0, 350); await wait(8000); await page.mouse.wheel(0, -350); await wait(3000);
 
+writeFileSync(new URL("./out/demo-timings.json", import.meta.url), JSON.stringify(mark, null, 2));
+console.log("timings", mark);
 await ctx.close();
 await browser.close();
 console.log("interactive demo recorded -> out/demo-interactive/");

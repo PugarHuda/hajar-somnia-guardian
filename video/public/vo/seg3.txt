@@ -1,0 +1,1 @@
+On the A.I. Agents page, the three Somnia agents Hajar runs on, and a live feed where every request and verdict is signed by validators, linked to its transaction.

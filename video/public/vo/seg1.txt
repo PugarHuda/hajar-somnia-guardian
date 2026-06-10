@@ -1,0 +1,1 @@
+And here it is. The real product, live on Somnia, no slides. I connect a wallet to the guardian. Now I deposit into the protected vault. A real transaction, and the protected value goes up on-chain. Now watch the guardian defend. I try to drain eighty percent of the vault in a single transaction. And Tier one reverts it instantly, in the same block. The breaker holds.
