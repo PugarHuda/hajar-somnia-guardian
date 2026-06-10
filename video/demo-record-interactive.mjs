@@ -68,9 +68,36 @@ await ctx.addInitScript(({ addr }) => {
   window.ethereum = provider;
 }, { addr: account.address });
 
+// Inject a VISIBLE cursor (headless Chromium renders none) that follows the mouse + pulses on click.
+await ctx.addInitScript(() => {
+  const mk = () => {
+    if (document.getElementById("__cur")) return;
+    const c = document.createElement("div");
+    c.id = "__cur";
+    c.style.cssText =
+      "position:fixed;z-index:2147483647;width:26px;height:26px;border:3px solid #4ee08a;border-radius:50%;" +
+      "background:rgba(78,224,138,.22);pointer-events:none;transform:translate(-50%,-50%);left:-100px;top:-100px;" +
+      "box-shadow:0 0 14px #4ee08a;transition:width .08s,height .08s,background .08s";
+    document.body && document.body.appendChild(c);
+  };
+  const set = (x, y) => { const c = document.getElementById("__cur"); if (c) { c.style.left = x + "px"; c.style.top = y + "px"; } };
+  document.addEventListener("DOMContentLoaded", mk);
+  if (document.body) mk();
+  document.addEventListener("mousemove", (e) => set(e.clientX, e.clientY));
+  document.addEventListener("mousedown", () => { const c = document.getElementById("__cur"); if (c) { c.style.width = "14px"; c.style.height = "14px"; c.style.background = "rgba(78,224,138,.6)"; } });
+  document.addEventListener("mouseup", () => { const c = document.getElementById("__cur"); if (c) { c.style.width = "26px"; c.style.height = "26px"; c.style.background = "rgba(78,224,138,.22)"; } });
+});
+
 const page = await ctx.newPage();
 const wait = (ms) => page.waitForTimeout(ms);
-const click = async (rx) => { const b = page.getByRole("button", { name: rx }).first(); await b.scrollIntoViewIfNeeded(); await b.click(); };
+// Move the cursor SMOOTHLY to a button's center (so you see it travel), then click.
+const click = async (rx) => {
+  const b = page.getByRole("button", { name: rx }).first();
+  await b.scrollIntoViewIfNeeded();
+  const box = await b.boundingBox();
+  if (box) { await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 25 }); await wait(400); }
+  await b.click();
+};
 
 console.log("acting as", account.address);
 
@@ -80,9 +107,13 @@ const at = () => Date.now() - t0;
 const mark = {};
 
 // ===== SECTION 1: DEFENSE (>= seg1 ~28.7s) =====
-await page.goto(SITE + "/defense", { waitUntil: "networkidle", timeout: 45000 });
+// domcontentloaded (fast) instead of networkidle (the live RPC polling keeps the network busy ~7s,
+// which showed a long white screen). Wait for real content, then a short settle — no white gap.
+await page.goto(SITE + "/defense", { waitUntil: "domcontentloaded", timeout: 45000 });
+await page.getByRole("button", { name: /connect/i }).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
+await page.mouse.move(960, 540, { steps: 10 }); // bring the cursor on-screen
 mark.defense = at();
-await wait(3500);
+await wait(2500);
 await click(/connect/i); await wait(4500);              // connect
 const amt = page.locator("input.inp").first();
 await amt.fill("0.03"); await wait(900);

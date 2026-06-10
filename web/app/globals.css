@@ -47,8 +47,7 @@ h1, h2, h3 { font-family: var(--font-pixel); font-weight: 400; line-height: 1.5;
 .brand { display: flex; align-items: center; gap: 16px; }
 .logo {
   width: 52px; height: 52px; display: grid; place-items: center; position: relative;
-  font-family: var(--font-pixel); font-size: 20px; color: var(--bg); background: var(--accent);
-  box-shadow: 0 0 0 3px var(--fg);
+  background: var(--panel); box-shadow: 0 0 0 3px var(--fg);
 }
 h1 { font-size: 26px; color: var(--fg); }
 .tag { display: inline-block; margin-top: 10px; font-size: 10px; color: var(--muted); border: var(--bw) solid var(--fg); padding: 6px 12px; font-family: var(--font-pixel); }
@@ -160,7 +159,7 @@ h1 { font-size: 26px; color: var(--fg); }
 /* ===== landing ===== */
 .landing { max-width: 1040px; margin: 0 auto; padding: 30px 26px 90px; }
 .hero { text-align: center; padding: 56px 0 40px; }
-.hero .crest { width: 90px; height: 90px; margin: 0 auto 26px; display: grid; place-items: center; font-family: var(--font-pixel); font-size: 38px; color: var(--bg); background: var(--accent); box-shadow: 0 0 0 4px var(--fg), 8px 8px 0 4px rgba(0,0,0,0.5); }
+.hero .crest { width: 96px; height: 96px; margin: 0 auto 26px; display: grid; place-items: center; background: var(--panel); box-shadow: 0 0 0 4px var(--fg), 8px 8px 0 4px rgba(0,0,0,0.5); }
 .hero h1 { font-size: 44px; color: var(--fg); line-height: 1.4; }
 .hero .quest { margin-top: 20px; font-family: var(--font-pixel); font-size: 11px; color: var(--accent-2); }
 .hero .pitch { margin: 26px auto 0; max-width: 700px; font-size: 20px; line-height: 1.7; color: var(--fg); opacity: 0.85; }

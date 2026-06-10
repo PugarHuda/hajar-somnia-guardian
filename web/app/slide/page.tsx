@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Logo from "../components/Logo";
 
 /**
  * Hajar pitch deck — a self-contained, keyboard-navigable slide deck at /slide.
@@ -188,6 +189,7 @@ export default function Deck() {
       style={{ minHeight: "100vh", background: C.bg, color: C.ink, display: "flex", flexDirection: "column",
         justifyContent: "center", padding: "6vh 8vw", fontFamily: BODY, cursor: "pointer" }}
     >
+      {i === 0 && <div style={{ marginBottom: 24 }}><Logo size={96} /></div>}
       {s.kicker && <div style={{ color: C.green, letterSpacing: 1.5, textTransform: "uppercase", fontSize: 11, marginBottom: 22, fontFamily: PIX }}>{s.kicker}</div>}
       <h1 style={{ fontSize: i === 0 ? 64 : 30, margin: "0 0 28px", lineHeight: 1.4, fontFamily: PIX, color: C.ink }}>{s.title}</h1>
       <div>{s.body}</div>

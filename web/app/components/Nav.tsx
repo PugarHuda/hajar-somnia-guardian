@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Logo from "./Logo";
 
 const LINKS = [
   { href: "/", label: "Overview" },
@@ -19,7 +20,7 @@ export default function Nav() {
     <nav className="nav">
       <div className="nav-inner">
         <Link href="/" className="nav-logo">
-          <span className="logo">H</span> Hajar
+          <span className="logo"><Logo size={20} /></span> Hajar
         </Link>
         <div className="nav-links">
           {LINKS.map((l) => (

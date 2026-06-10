@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatEther } from "viem";
 import { client, ADDRESSES, explorer, guardianAbi, vaultAbi } from "./lib/somnia";
+import Logo from "./components/Logo";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -39,7 +40,7 @@ export default function Landing() {
   return (
     <main className="landing">
       <section className="hero">
-        <div className="crest">H</div>
+        <div className="crest"><Logo size={58} /></div>
         <h1>HAJAR</h1>
         <div className="quest">⚔ AUTONOMOUS DEFI GUARDIAN · SOMNIA AGENTIC L1</div>
         <p className="pitch">
