@@ -83,35 +83,47 @@ await ctx.addInitScript(() => {
   document.addEventListener("DOMContentLoaded", paint);
 });
 
-// Inject a VISIBLE cursor (headless Chromium renders none) that follows the mouse + pulses on click.
+// Inject a VISIBLE cursor (headless Chromium renders none). Append to <html> (NOT body) so React's
+// hydration can't reconcile it away, re-ensure it on an interval, and drive it from Node so it never
+// depends on synthetic DOM events firing.
 await ctx.addInitScript(() => {
-  const mk = () => {
-    if (document.getElementById("__cur")) return;
-    const c = document.createElement("div");
-    c.id = "__cur";
-    c.style.cssText =
-      "position:fixed;z-index:2147483647;width:26px;height:26px;border:3px solid #4ee08a;border-radius:50%;" +
-      "background:rgba(78,224,138,.22);pointer-events:none;transform:translate(-50%,-50%);left:-100px;top:-100px;" +
-      "box-shadow:0 0 14px #4ee08a;transition:width .08s,height .08s,background .08s";
-    document.body && document.body.appendChild(c);
+  const ensure = () => {
+    let c = document.getElementById("__cur");
+    if (!c) {
+      c = document.createElement("div");
+      c.id = "__cur";
+      c.style.cssText =
+        "position:fixed;z-index:2147483647;width:30px;height:30px;border:4px solid #4ee08a;border-radius:50%;" +
+        "background:rgba(78,224,138,.25);pointer-events:none;transform:translate(-50%,-50%);left:-300px;top:-300px;" +
+        "box-shadow:0 0 18px #4ee08a, inset 0 0 8px rgba(78,224,138,.6);transition:width .08s,height .08s,background .08s";
+      document.documentElement.appendChild(c);
+    }
+    return c;
   };
-  const set = (x, y) => { const c = document.getElementById("__cur"); if (c) { c.style.left = x + "px"; c.style.top = y + "px"; } };
-  document.addEventListener("DOMContentLoaded", mk);
-  if (document.body) mk();
-  document.addEventListener("mousemove", (e) => set(e.clientX, e.clientY));
-  document.addEventListener("mousedown", () => { const c = document.getElementById("__cur"); if (c) { c.style.width = "14px"; c.style.height = "14px"; c.style.background = "rgba(78,224,138,.6)"; } });
-  document.addEventListener("mouseup", () => { const c = document.getElementById("__cur"); if (c) { c.style.width = "26px"; c.style.height = "26px"; c.style.background = "rgba(78,224,138,.22)"; } });
+  window.__moveCur = (x, y) => { const c = ensure(); c.style.left = x + "px"; c.style.top = y + "px"; };
+  window.__pressCur = (d) => { const c = ensure(); if (d) { c.style.width = "16px"; c.style.height = "16px"; c.style.background = "rgba(78,224,138,.7)"; } else { c.style.width = "30px"; c.style.height = "30px"; c.style.background = "rgba(78,224,138,.25)"; } };
+  setInterval(ensure, 250);
+  document.addEventListener("mousemove", (e) => window.__moveCur(e.clientX, e.clientY));
 });
 
 const page = await ctx.newPage();
 const wait = (ms) => page.waitForTimeout(ms);
-// Move the cursor SMOOTHLY to a button's center (so you see it travel), then click.
+// Smoothly move the fake cursor to (x,y), driving it from Node so it's guaranteed visible.
+const pointer = async (x, y) => {
+  const steps = 24;
+  await page.mouse.move(x, y, { steps });
+  await page.evaluate(([px, py]) => (window).__moveCur && (window).__moveCur(px, py), [x, y]).catch(() => {});
+};
+// Move the cursor to a button's center (you see it travel), pulse, then click.
 const click = async (rx) => {
   const b = page.getByRole("button", { name: rx }).first();
   await b.scrollIntoViewIfNeeded();
   const box = await b.boundingBox();
-  if (box) { await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 25 }); await wait(400); }
+  if (box) { await pointer(box.x + box.width / 2, box.y + box.height / 2); await wait(450); }
+  await page.evaluate(() => (window).__pressCur && (window).__pressCur(true)).catch(() => {});
   await b.click();
+  await wait(150);
+  await page.evaluate(() => (window).__pressCur && (window).__pressCur(false)).catch(() => {});
 };
 
 console.log("acting as", account.address);
@@ -126,7 +138,7 @@ const mark = {};
 // which showed a long white screen). Wait for real content, then a short settle — no white gap.
 await page.goto(SITE + "/defense", { waitUntil: "domcontentloaded", timeout: 45000 });
 await page.getByRole("button", { name: /connect/i }).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
-await page.mouse.move(960, 540, { steps: 10 }); // bring the cursor on-screen
+await pointer(760, 300); // bring the cursor on-screen
 mark.defense = at();
 // Pace the actions to seg1's narration: intro (0-6s) -> connect (~6s) -> deposit (~9s) -> drain (~17s).
 await wait(6000);                                       // intro narration plays
@@ -137,20 +149,28 @@ await click(/^deposit/i); await wait(8000);             // "I deposit… a real 
 await click(/try drain/i); await wait(6000);            // "watch the guardian defend… drain 80%… reverts" (~17-23s)
 await click(/reset breaker/i).catch(() => {}); await wait(2000);
 
-// ===== SECTION 2: INTELLIGENCE (>= seg2 ~14.1s) =====
-await page.goto(SITE + "/intelligence", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+// ===== SECTION 2: INTELLIGENCE (>= seg2 ~12s) =====
+await page.goto(SITE + "/intelligence", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
+await page.getByText(/Self-learning/i).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 mark.intelligence = at();
-await wait(7000); await page.mouse.wheel(0, 380); await wait(6000); await page.mouse.wheel(0, -380); await wait(1500);
+await pointer(360, 180); await wait(3500);                // point at the highest-threat card
+await page.mouse.wheel(0, 360); await pointer(420, 430); await wait(5000); // point at a knowledge bar
+await page.mouse.wheel(0, -360); await wait(1500);
 
-// ===== SECTION 3: AI AGENTS (>= seg3 ~11.1s) =====
-await page.goto(SITE + "/agents", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+// ===== SECTION 3: AI AGENTS (>= seg3 ~11s) =====
+await page.goto(SITE + "/agents", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
+await page.getByText(/AI agents/i).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 mark.agents = at();
-await wait(5500); await page.mouse.wheel(0, 460); await wait(6500);
+await pointer(300, 320); await wait(3500);                // point at the first agent card
+await page.mouse.wheel(0, 440); await pointer(700, 400); await wait(6000);
 
-// ===== SECTION 4: IDENTITY + close (>= seg4 ~19s) =====
-await page.goto(SITE + "/identity", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+// ===== SECTION 4: IDENTITY + close (>= seg4 ~16s) =====
+await page.goto(SITE + "/identity", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
+await page.getByText(/Agent identity/i).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 mark.identity = at();
-await wait(9000); await page.mouse.wheel(0, 350); await wait(8000); await page.mouse.wheel(0, -350); await wait(3000);
+await pointer(360, 200); await wait(4000);                // point at the agentId card
+await page.mouse.wheel(0, 320); await pointer(700, 380); await wait(7000); // point at a standard
+await page.mouse.wheel(0, -320); await wait(3000);
 
 writeFileSync(new URL("./out/demo-timings.json", import.meta.url), JSON.stringify(mark, null, 2));
 console.log("timings", mark);
