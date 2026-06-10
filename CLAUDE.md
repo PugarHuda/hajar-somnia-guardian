@@ -10,7 +10,7 @@ Autonomous DeFi Guardian on **Somnia** (Agentic L1). Submission for the **Somnia
 ## Run
 ```bash
 forge build
-forge test -vv          # 78 tests, all passing
+forge test -vv          # 82 tests, all passing
 forge script script/Deploy.s.sol --rpc-url somnia_testnet --broadcast --private-key $PRIVATE_KEY
 ```
 
@@ -93,10 +93,11 @@ still-open ABI gap is `inferToolsChat`'s `onchainTools` tuple (not published) �
   ALL tiers now live on v4. Web has a /slide pitch deck.
 - **HajarAgentRegistry (ERC-8004)** `0xEa28EDF008A204BFeD65bD093ad5BC219fd35152` — Hajar registered
   as agentId 1, tokenURI = live agent-card. On-chain agent identity (owner=deployer, verified).
-- **HajarThreatLearner (self-learning)** `0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e` — uses all 3
-  agents (Parse/JSON/LLM inferString) to accumulate an on-chain exploit-knowledge base. Live-proven:
-  learned market-stress=10 from Fear&Greed Index via JSON API consensus. 5 categories, funded.
-  src/HajarThreatLearner.sol. NOT model training — honest knowledge-accumulation loop.
+- **HajarThreatLearner v2 (self-learning + feedback loop)** `0x97BE2B347682D72D98a2965ADa4947EA1B2B8Acc`
+  — accumulates an on-chain knowledge base from **rotating sources** (sourcePool + round-robin cursor),
+  then **feeds back into the AI**: `assessRisk()` injects `threatLandscape()` into an inferNumber prompt
+  → `lastAssessment`. Live-proven: learned market-stress=9 → AI risk=75 informed by it. Guardian stays
+  v4 (loop lives in the learner, no v5 redeploy). Old learner 0x653F superseded.
 - **HajarGuardian v3** `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c`
   — v2 features + **Tier-2d autonomous remediation (inferToolsChat)**. Live-verified 4 Jun 2026:
   inferToolsChat reached validator consensus, AI reasoned "No action required" on a healthy vault

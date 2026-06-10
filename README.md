@@ -114,7 +114,7 @@ it *is* a discoverable ERC-8004 agent other agents can find and verify, and it *
 |------|------|
 | `src/HajarGuardian.sol` | The multi-tenant guardian. Tier-1 policy in `checkWithdrawal()` (per-protocol `hardBps / rapidBps / greyBps / risk`); hardening tiers: outflow budget, spot-price guard, TVL-drop detector. |
 | `src/HajarAgentRegistry.sol` | **ERC-8004 Identity Registry** — registers Hajar (and any agent) as a portable, discoverable on-chain identity (ERC-721 + agent-card URI + metadata). |
-| `src/HajarThreatLearner.sol` | **Self-learning threat intel** — uses all 3 Somnia agents (Parse Website scrape + JSON API feed + LLM `inferString` classify) to keep an on-chain exploit-knowledge base current, with no human in the loop. Live-proven (`market-stress = 10` learned from the Fear & Greed Index). |
+| `src/HajarThreatLearner.sol` | **Self-learning threat intel (v2)** — uses all 3 Somnia agents to keep an on-chain knowledge base current from **rotating sources**, then **feeds back into the AI**: `assessRisk()` injects the learned landscape into an LLM risk read so the AI's judgment is shaped by what Hajar learned. Live-proven: learned `market-stress = 9` by consensus → AI scored a withdrawal `75/100` informed by it. |
 | `src/ProtectedVault.sol` | Demo protocol being protected (stands in for any vault / lending market / AMM treasury). |
 | `src/HajarReactiveSubscriber.sol` | **Real Tier-3**: registers an on-chain Reactivity subscription; validators auto-invoke its `onEvent` on the vault's `Withdrawn` event. |
 | `src/HajarReactiveMonitor.sol` | Keeper-driven Tier-3 variant used for local tests. |
@@ -126,7 +126,7 @@ it *is* a discoverable ERC-8004 agent other agents can find and verify, and it *
 
 ```bash
 forge build
-forge test -vv     # 78 passing tests: all tiers, hardening, self-learning, ERC-8004 registry,
+forge test -vv     # 82 passing tests: all tiers, hardening, self-learning, ERC-8004 registry,
                    # guard, TVL-drop detector), ERC-8004 registry, price oracle, threat intel,
                    # autonomous remediation, pause/reset, whitelist, multi-tenant, fuzz, auth
 ```
@@ -147,7 +147,7 @@ live Reactivity precompile (`0x0100`), so it is not part of the main deploy scri
 |----------|---------|----------|
 | **HajarGuardian v4** (current — + outflow budget, spot-price guard, TVL-drop detector) | `0xf47D21Afd23639870c5185462B2F418eF59d6F67` | [view](https://shannon-explorer.somnia.network/address/0xf47D21Afd23639870c5185462B2F418eF59d6F67) |
 | **HajarAgentRegistry** (ERC-8004 — Hajar = agentId 1) | `0xEa28EDF008A204BFeD65bD093ad5BC219fd35152` | [view](https://shannon-explorer.somnia.network/address/0xEa28EDF008A204BFeD65bD093ad5BC219fd35152) |
-| **HajarThreatLearner** (self-learning, all 3 agents) | `0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e` | [view](https://shannon-explorer.somnia.network/address/0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e) |
+| **HajarThreatLearner** (self-learning, all 3 agents) | `0x97BE2B347682D72D98a2965ADa4947EA1B2B8Acc` | [view](https://shannon-explorer.somnia.network/address/0x97BE2B347682D72D98a2965ADa4947EA1B2B8Acc) |
 | ProtectedVault (v4) | `0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043` | [view](https://shannon-explorer.somnia.network/address/0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043) |
 | HajarGuardian v3 (Tier-1/2/2b/2c/2d + Tier-3, all verified live) | `0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c` | [view](https://shannon-explorer.somnia.network/address/0x544578aCc02EA4BEA5CAaA3382A6d7AE52aAbc9c) |
 | **HajarReactiveSubscriber (real Tier-3, bound to v4)** | `0xd6Fa24d9e388D12086D430e9F14ff99980E7789b` | [view](https://shannon-explorer.somnia.network/address/0xd6Fa24d9e388D12086D430e9F14ff99980E7789b) |
@@ -237,7 +237,7 @@ Too strict → false pauses; too loose → an exploit drains funds before Tier-2
 - [x] Proactive autonomous monitoring (`requestRiskCheck`) for 24/7 AI health checks
 - [x] Demo vault + Exploiter (looped-drain) scenario
 - [x] `ISomniaAgents` reconciled to the live ABI; real agent ids wired
-- [x] **78 passing tests** (unit + integration + edge + fuzz · see QA_REPORT.md)
+- [x] **82 passing tests** (unit + integration + edge + fuzz · see QA_REPORT.md)
 - [x] Tier-2d autonomous remediation (`inferToolsChat`) — **deployed + verified live** (selector
       `0xd0683905` test-locked; consensus reached; AI declined to act on a healthy vault)
 - [x] All tiers deployed + live-verified on Somnia testnet (real validator consensus):

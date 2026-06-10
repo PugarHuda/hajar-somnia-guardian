@@ -79,13 +79,15 @@ const SLIDES: Slide[] = [
   },
   {
     kicker: "The differentiator",
-    title: "It learns new exploits — by itself",
+    title: "It learns new exploits — and applies them",
     body: (
       <ul style={ulS}>
-        <li>A self-updating knowledge loop using <b style={{ color: C.cyan }}>all three Somnia agents</b>:
-          Parse Website scrapes security feeds, JSON API pulls structured scores, LLM <code style={codeS}>inferString</code> classifies the pattern.</li>
-        <li>Results accumulate in an <b>on-chain knowledge base</b> per exploit category — Hajar stays current.</li>
-        <li style={{ color: C.green }}>Live-proven &amp; <b>continuously updating</b>: it learned a market-stress level from the Fear &amp; Greed Index by validator consensus — and <b>re-learned it (10 → 9)</b> as the live index moved, accumulating on-chain.</li>
+        <li>A self-updating loop using <b style={{ color: C.cyan }}>all three Somnia agents</b>, <b>rotating sources</b> each scan
+          (rekt.news, Immunefi, a JSON index…) so it never trusts just one feed.</li>
+        <li>What it learns accumulates on-chain — then <b>feeds back into the AI</b>: Hajar injects its learned
+          landscape into an LLM risk read, so the AI&apos;s judgment is shaped by what it learned.</li>
+        <li style={{ color: C.green }}>Live-proven, the loop closed: it learned <b>market-stress = 9</b> by consensus, then the AI scored a
+          withdrawal <b>75 / 100 — informed by that learning</b>, on-chain.</li>
         <li style={{ color: C.dim, fontSize: 16 }}>Honest scope: knowledge accumulation &amp; adaptation, not model training.</li>
       </ul>
     ),

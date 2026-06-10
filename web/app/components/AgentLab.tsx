@@ -49,6 +49,10 @@ function describe(name: string, a: Record<string, unknown>): { agent: string; ba
       return { agent: "Threat Learner", badge: "learned", detail: `learned threat level ${a.level} from ${a.validatorCount} validators (obs #${a.observations})` };
     case "Classified":
       return { agent: "LLM inferString", badge: "learned", detail: `classified pattern as "${a.name}" (obs #${a.observations})` };
+    case "AssessRequested":
+      return { agent: "LLM + learned", badge: "request", detail: `AI risk read, informed by learned context: "${a.landscape}"` };
+    case "AssessVerdict":
+      return { agent: "LLM + learned", badge: n(a.risk) >= 70 ? "tripped" : "verdict", detail: `AI risk ${a.risk}/100 — shaped by what Hajar learned, from ${a.validatorCount} validators` };
     default:
       return null;
   }

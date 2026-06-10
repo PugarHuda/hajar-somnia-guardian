@@ -151,6 +151,9 @@ export const learnerAbi = [
   { type: "function", name: "lastAssessment", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
   { type: "function", name: "lastAssessedAt", stateMutability: "view", inputs: [], outputs: [{ type: "uint64" }] },
   { type: "function", name: "sourceCount", stateMutability: "view", inputs: [{ type: "bytes32" }], outputs: [{ type: "uint256" }] },
+  { type: "event", name: "AssessRequested", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "string", name: "landscape", indexed: false }] },
   { type: "event", name: "AssessVerdict", inputs: [
     { type: "uint256", name: "requestId", indexed: true },
     { type: "uint8", name: "risk", indexed: false },
