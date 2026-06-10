@@ -135,57 +135,123 @@ const click = async (rx) => { const b = await goTo(rx); await wait(350); await t
 
 console.log("acting as", account.address);
 
-// Section waits are tuned >= each VO segment's length so narration never spills into the next page.
 const t0 = Date.now();
 const at = () => Date.now() - t0;
 const mark = {};
 
-// ===== SECTION 1: DEFENSE (>= seg1 ~28.7s) =====
-// domcontentloaded (fast) instead of networkidle (the live RPC polling keeps the network busy ~7s,
-// which showed a long white screen). Wait for real content, then a short settle — no white gap.
+// ===== SECTION 1: DEFENSE (>= seg1 28.7s) =====
+// VO sentence timings from edge-tts SentenceBoundary (+ 300ms VO offset from mark.defense):
+//   "I connect a wallet"      → 4450ms into VO → abs 4750ms from mark
+//   "Now I deposit..."        → 9887ms into VO → abs 10187ms from mark
+//   "I try to drain..."       → 19712ms into VO → abs 20012ms from mark
 await page.goto(SITE + "/defense", { waitUntil: "domcontentloaded", timeout: 45000 });
 await page.getByRole("button", { name: /connect/i }).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
-await pointer(760, 300); // bring the cursor on-screen
-mark.defense = at(); // t=0 of the defense section (seg1 VO plays from demo-time ~0.3s)
-// Click each button EXACTLY when seg1 names it (word timings from edge-tts, +0.3s VO offset):
-//   "I connect a wallet"  4.5-6.5s · "Now I deposit" 6.5-8.9s · "drain eighty percent" 14.6-18.5s
-const bConnect = await goTo(/connect/i);                // travel during the intro (~0.8s)
-await wait(4600);                                       // hold until the "connect a wallet" line
-await tap(bConnect);                                    // click ~5.4s  ✓ on "connect"
+await pointer(760, 300); // bring cursor on-screen
+mark.defense = at();
+
+// goTo takes ~800ms. Need tap at mark+4750ms → wait(4750-800-50) = wait(3900)
+const bConnect = await goTo(/connect/i);
+await wait(3900);           // "I connect a wallet." → tap at ~4.75s
+await tap(bConnect);
+
+// fill input while "Every button here sends a real signed transaction on-chain."
 const amt = page.locator("input.inp").first();
 await amt.fill("0.03");
-const bDep = await goTo(/^deposit/i);                   // travel during "Now I deposit"
-await wait(300);
-await tap(bDep);                                        // click ~7.0s  ✓ on "deposit"
-await wait(8200);                                       // deposit tx + "real transaction… now watch the guardian defend"
-const bDrain = await goTo(/try drain/i);                // travel into the "drain" line
-await tap(bDrain);                                      // click ~16.3s ✓ on "drain eighty percent"
-await wait(4200);                                       // "Tier one reverts it instantly… the breaker holds"
-const bReset = await goTo(/reset breaker/i); await tap(bReset);
-await wait(1500);
+await pointer(700, 290);    // point at wallet address shown in console-head
 
-// ===== SECTION 2: INTELLIGENCE (>= seg2 ~12s) =====
+// goTo+fill cost ~1200ms. Deposit tap target: mark+10187ms. Time so far: ~4950+1200=6150ms → wait(3900)
+const bDep = await goTo(/^deposit/i);
+await wait(3900);           // "Now I deposit into the protected vault" → tap at ~10.2s
+await tap(bDep);
+
+// "A real transaction, and the protected value goes up on-chain." — point at live feed
+await wait(2500);
+await pointer(480, 390);    // feed area (deposited event appears here)
+await wait(1700);           // "Now watch the guardian defend."
+
+// Drain tap target: mark+20012ms. Time so far: ~10327+2500+1700=14527ms → goTo(~500ms)=15027ms → wait(4800)
+const bDrain = await goTo(/try drain/i);
+await wait(4800);           // "I try to drain eighty percent..." → tap at ~20s
+await tap(bDrain);
+
+// "Tier one reverts it instantly, same block." — point at feed showing HardBlock
+await wait(2000);
+await pointer(480, 390);    // HardBlock event appears in feed
+await wait(1700);           // "No waiting."
+
+// "The breaker holds." — scroll down to show Tier-1 explanation card
+await page.mouse.wheel(0, 500);
+await wait(1800);
+await page.mouse.wheel(0, -500);
+
+const bReset = await goTo(/reset breaker/i); await tap(bReset);
+await wait(2000);
+
+// ===== SECTION 2: INTELLIGENCE (>= seg2 27.6s) =====
 await page.goto(SITE + "/intelligence", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
 await page.getByText(/Self-learning/i).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 mark.intelligence = at();
-await pointer(360, 180); await wait(3500);                // point at the highest-threat card
-await page.mouse.wheel(0, 360); await pointer(420, 430); await wait(5000); // point at a knowledge bar
-await page.mouse.wheel(0, -360); await wait(1500);
+await pointer(340, 210);    // point at "Highest learned threat" card
+await wait(3800);
+await pointer(680, 210);    // point at "Categories tracked" card
+await wait(3200);
+await page.mouse.wheel(0, 300); // scroll to knowledge base bars
+await pointer(480, 380);    // point at oracle-manipulation bar
+await wait(4000);
+await pointer(480, 430);    // point at market-stress bar (market-stress = 10)
+await wait(3500);
+await page.mouse.wheel(0, 320); // scroll to feedback loop callout
+await pointer(500, 360);
+await wait(4500);           // "what it learned shapes the AI"
+await page.mouse.wheel(0, 260); // scroll to "How it learns"
+await pointer(520, 340);
+await wait(4200);
+await page.mouse.wheel(0, -1200); // scroll back to top
+await wait(2000);
 
-// ===== SECTION 3: AI AGENTS (>= seg3 ~11s) =====
+// ===== SECTION 3: AI AGENTS (>= seg3 31.6s) =====
 await page.goto(SITE + "/agents", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
 await page.getByText(/AI agents/i).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 mark.agents = at();
-await pointer(300, 320); await wait(3500);                // point at the first agent card
-await page.mouse.wheel(0, 440); await pointer(700, 400); await wait(6000);
+await pointer(280, 320);    // LLM Inference card
+await wait(4000);
+await pointer(640, 320);    // JSON API card
+await wait(3500);
+await pointer(1000, 320);   // Parse Website card
+await wait(3500);
+await page.mouse.wheel(0, 460); // scroll to AgentLab / "Fire an agent live"
+await pointer(480, 460);    // connect wallet button area
+await wait(5000);           // "Connecting a wallet here lets you fire one yourself"
+await page.mouse.wheel(0, 200);
+await pointer(520, 500);    // feed section
+await wait(5500);           // "Watch EscalatedToAI then AIVerdict stream in"
+await page.mouse.wheel(0, 400); // scroll to "How a verdict is produced"
+await pointer(440, 400);
+await wait(5000);
+await page.mouse.wheel(0, -1460); // scroll to top
 
-// ===== SECTION 4: IDENTITY + close (>= seg4 ~16s) =====
+// ===== SECTION 4: IDENTITY (>= seg4 33.3s) =====
 await page.goto(SITE + "/identity", { waitUntil: "domcontentloaded", timeout: 45000 }).catch(() => {});
 await page.getByText(/Agent identity/i).first().waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
 mark.identity = at();
-await pointer(360, 200); await wait(4000);                // point at the agentId card
-await page.mouse.wheel(0, 320); await pointer(700, 380); await wait(7000); // point at a standard
-await page.mouse.wheel(0, -320); await wait(3000);
+await pointer(280, 260);    // agentId card
+await wait(4000);           // "Hajar is a registered ERC 8004 Trustless Agent"
+await pointer(640, 260);    // owner card (verified on-chain)
+await wait(3800);           // "To verify: open the agent card, call ownerOf one"
+await pointer(1000, 260);   // agents-in-registry card
+await wait(3200);
+await page.mouse.wheel(0, 360); // scroll to standards
+await pointer(400, 380);    // ERC-8004 tier
+await wait(4500);           // "crypto-economic trust IS Somnia validator consensus"
+await pointer(400, 500);    // ERC-7265 tier
+await wait(4000);           // "outflow budget tier IS the ERC-7265 rate-limiter"
+await pointer(400, 600);    // x402 tier
+await wait(3500);           // "x402 flag for agent payments"
+await page.mouse.wheel(0, 300); // scroll to discovery surface
+await pointer(500, 420);
+await wait(4500);           // "Real clicks. Real transactions. Real on-chain data."
+await page.mouse.wheel(0, -1000);
+await wait(3000);
 
 writeFileSync(new URL("./out/demo-timings.json", import.meta.url), JSON.stringify(mark, null, 2));
 console.log("timings", mark);
