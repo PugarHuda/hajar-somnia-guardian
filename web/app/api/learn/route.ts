@@ -35,10 +35,12 @@ export async function GET() {
       };
     });
 
-    const [topName, topLevel] = (await client.readContract({
-      ...learner,
-      functionName: "highestThreat",
-    })) as [string, number];
+    const [[topName, topLevel], landscape, lastAssessment, lastAssessedAt] = (await Promise.all([
+      client.readContract({ ...learner, functionName: "highestThreat" }),
+      client.readContract({ ...learner, functionName: "threatLandscape" }),
+      client.readContract({ ...learner, functionName: "lastAssessment" }),
+      client.readContract({ ...learner, functionName: "lastAssessedAt" }),
+    ])) as [[string, number], string, number, bigint];
 
     return NextResponse.json({
       learner: ADDRESSES.learner,
@@ -46,7 +48,11 @@ export async function GET() {
       agents: { parseWebsite: "12875401142070969085", jsonApi: "13174292974160097713", llmInference: "12847293847561029384" },
       categories,
       highestThreat: { name: topName, level: topLevel },
-      note: "Knowledge accumulates from external security feeds via Somnia agents (scrape + classify), not model training.",
+      // the feedback loop: an AI risk read produced WITH the learned landscape in the prompt.
+      learnedLandscape: landscape,
+      aiAssessment: { risk: lastAssessment, at: Number(lastAssessedAt) ? new Date(Number(lastAssessedAt) * 1000).toISOString() : null },
+      rotatingSources: true,
+      note: "Knowledge accumulates from rotating external feeds via Somnia agents, then feeds back into an AI risk read (assessRisk). Accumulation + adaptation, not model training.",
       ts: new Date().toISOString(),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

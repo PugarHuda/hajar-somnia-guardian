@@ -66,28 +66,38 @@ contract HajarThreatLearner {
     }
 
     bytes32[] public categoryIds;
-    mapping(bytes32 categoryId => Source) public sources;
+    // ROTATING SOURCES: each category has a POOL of feeds; every learn() advances a round-robin
+    // cursor so consecutive scans pull from a DIFFERENT source — broader, less single-source-dependent.
+    mapping(bytes32 categoryId => Source[]) public sourcePool;
+    mapping(bytes32 categoryId => uint256) public sourceCursor;
     mapping(bytes32 categoryId => Knowledge) public knowledge;
 
     enum ReqKind {
         Scan, // a numeric threat-level scan (Parse or JSON)
-        Classify // an inferString taxonomy classification
+        Classify, // an inferString taxonomy classification
+        Assess // an LLM risk score INFORMED by the current learned landscape (the feedback loop)
     }
 
     struct Pending {
         bool active;
-        bytes32 category; // set for Scan; 0 for Classify (resolved from the returned string)
+        bytes32 category; // set for Scan; 0 for Classify/Assess
         ReqKind kind;
     }
 
     mapping(uint256 requestId => Pending) public pending;
 
+    // FEEDBACK LOOP: the latest AI risk read produced WITH the learned landscape in the prompt.
+    uint8 public lastAssessment; // 0..100
+    uint64 public lastAssessedAt;
+
     event CategoryAdded(bytes32 indexed id, string name);
-    event SourceSet(bytes32 indexed id, uint8 kind, string url);
-    event LearnRequested(uint256 indexed requestId, bytes32 indexed category, uint8 kind);
+    event SourceSet(bytes32 indexed id, uint8 kind, string url, uint256 poolSize);
+    event LearnRequested(uint256 indexed requestId, bytes32 indexed category, uint8 kind, uint256 sourceIndex);
     event Learned(bytes32 indexed category, uint8 level, uint32 observations, uint256 validatorCount);
     event ClassifyRequested(uint256 indexed requestId);
     event Classified(bytes32 indexed category, string name, uint32 observations);
+    event AssessRequested(uint256 indexed requestId, string landscape);
+    event AssessVerdict(uint256 indexed requestId, uint8 risk, uint256 validatorCount);
     event ScanSkipped(bytes32 indexed category, string reason);
     event Funded(address indexed from, uint256 amount);
 
@@ -124,7 +134,9 @@ contract HajarThreatLearner {
         }
     }
 
-    /// @notice Configure where Hajar learns a category's threat level from (a scrape or a feed).
+    /// @notice Add a feed to a category's ROTATING source pool. Call it several times per category
+    ///         with different URLs (rekt.news, an advisory, a CVE/threat API…) so the learner keeps
+    ///         switching sources on each scan instead of trusting one.
     function setSource(
         string calldata name,
         SourceKind kind,
@@ -135,7 +147,7 @@ contract HajarThreatLearner {
         uint8 confidence
     ) external onlyOwner {
         bytes32 id = addCategory(name);
-        sources[id] = Source({
+        sourcePool[id].push(Source({
             enabled: true,
             kind: kind,
             url: url,
@@ -143,8 +155,12 @@ contract HajarThreatLearner {
             prompt: prompt,
             numPages: numPages == 0 ? 1 : numPages,
             confidence: confidence
-        });
-        emit SourceSet(id, uint8(kind), url);
+        }));
+        emit SourceSet(id, uint8(kind), url, sourcePool[id].length);
+    }
+
+    function sourceCount(bytes32 category) external view returns (uint256) {
+        return sourcePool[category].length;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -154,8 +170,12 @@ contract HajarThreatLearner {
     /// @notice SCRAPE/FEED: ask the right Somnia agent for `category`'s current threat level and
     ///         record it. Call on a schedule (keeper) so the knowledge base stays current.
     function learn(bytes32 category) external returns (uint256 requestId) {
-        Source memory s = sources[category];
-        if (!s.enabled) revert NotConfigured();
+        Source[] storage pool = sourcePool[category];
+        if (pool.length == 0) revert NotConfigured();
+        // round-robin: pick the current source, then advance the cursor so the NEXT scan rotates.
+        uint256 idx = sourceCursor[category] % pool.length;
+        sourceCursor[category] = idx + 1;
+        Source memory s = pool[idx];
 
         if (s.kind == SourceKind.Json) {
             uint256 needed = platform.getRequestDeposit() + (jsonCost * subcommitteeSize);
@@ -191,7 +211,66 @@ contract HajarThreatLearner {
             );
         }
         pending[requestId] = Pending({active: true, category: category, kind: ReqKind.Scan});
-        emit LearnRequested(requestId, category, uint8(s.kind));
+        emit LearnRequested(requestId, category, uint8(s.kind), idx);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+          FEEDBACK LOOP — learned knowledge informs an AI risk read
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The whole point of learning: ASK the LLM for a risk score on a situation, with Hajar's
+    ///         CURRENT learned threat landscape injected into the prompt. So the AI's judgment is
+    ///         shaped by what Hajar has learned from the outside world — not a static rule. The result
+    ///         (0..100) is stored in `lastAssessment` and can drive policy.
+    function assessRisk(string calldata situation) external onlyOwner returns (uint256 requestId) {
+        uint256 needed = platform.getRequestDeposit() + (llmCost * subcommitteeSize);
+        if (address(this).balance < needed) {
+            emit ScanSkipped(bytes32(0), "underfunded");
+            return 0;
+        }
+        string memory landscape = threatLandscape();
+        string memory prompt = string.concat(
+            "Hajar's learned threat landscape right now: ",
+            landscape,
+            ". Given that context, rate the risk of this situation 0 (safe) to 100 (active exploit): ",
+            situation
+        );
+        bytes memory payload = abi.encodeWithSelector(
+            ILLMInferenceAgent.inferNumber.selector,
+            prompt,
+            "You are a DeFi security guardian. Use the provided learned threat landscape to inform your "
+            "score. Reply with the integer only.",
+            int256(0),
+            int256(100),
+            false
+        );
+        requestId = platform.createRequest{value: needed}(
+            llmAgentId, address(this), this.handleResponse.selector, payload
+        );
+        pending[requestId] = Pending({active: true, category: bytes32(0), kind: ReqKind.Assess});
+        emit AssessRequested(requestId, landscape);
+    }
+
+    /// @notice A compact, human+LLM-readable summary of what Hajar has learned (top categories).
+    function threatLandscape() public view returns (string memory out) {
+        for (uint256 i = 0; i < categoryIds.length; i++) {
+            Knowledge storage k = knowledge[categoryIds[i]];
+            if (k.level == 0) continue;
+            out = bytes(out).length == 0
+                ? string.concat(k.name, " ", _u(k.level))
+                : string.concat(out, ", ", k.name, " ", _u(k.level));
+        }
+        if (bytes(out).length == 0) out = "no active threats learned yet";
+    }
+
+    function _u(uint256 v) internal pure returns (string memory) {
+        if (v == 0) return "0";
+        uint256 j = v;
+        uint256 len;
+        while (j != 0) { len++; j /= 10; }
+        bytes memory b = new bytes(len);
+        while (v != 0) { len--; b[len] = bytes1(uint8(48 + v % 10)); v /= 10; }
+        return string(b);
     }
 
     /// @notice CLASSIFY: hand the LLM a free-form description and the taxonomy, and let it name the
@@ -274,6 +353,14 @@ contract HajarThreatLearner {
         }
         uint256 level = sum / n;
         if (level > 100) level = 100;
+
+        if (ctx.kind == ReqKind.Assess) {
+            // Feedback loop: the AI's risk read (informed by the learned landscape) — store + emit.
+            lastAssessment = uint8(level);
+            lastAssessedAt = uint64(block.timestamp);
+            emit AssessVerdict(requestId, uint8(level), n);
+            return;
+        }
 
         Knowledge storage know = knowledge[ctx.category];
         know.level = uint8(level);

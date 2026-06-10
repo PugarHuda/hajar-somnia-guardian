@@ -106,6 +106,51 @@ contract HajarThreatLearnerTest is Test {
         learner.handleResponse(1, empty, ResponseStatus.Success, req);
     }
 
+    /// ROTATING SOURCES: a category can hold a pool of feeds; each learn() advances the cursor so
+    /// consecutive scans rotate to a different source.
+    function test_RotatingSources_AdvancesCursor() public {
+        learner.setSource("oracle-manipulation", HajarThreatLearner.SourceKind.Json, "https://a", "s", "", 0, 0);
+        learner.setSource("oracle-manipulation", HajarThreatLearner.SourceKind.Json, "https://b", "s", "", 0, 0);
+        learner.setSource("oracle-manipulation", HajarThreatLearner.SourceKind.ParseWebsite, "https://c", "", "p", 1, 40);
+        assertEq(learner.sourceCount(ORACLE), 3, "pool grew");
+        assertEq(learner.sourceCursor(ORACLE), 0);
+
+        learner.learn(ORACLE); // uses idx 0
+        assertEq(learner.sourceCursor(ORACLE), 1);
+        learner.learn(ORACLE); // uses idx 1
+        assertEq(learner.sourceCursor(ORACLE), 2);
+        learner.learn(ORACLE); // uses idx 2 -> wraps next time
+        assertEq(learner.sourceCursor(ORACLE), 3); // 3 % 3 == 0 on the next call
+    }
+
+    /// FEEDBACK LOOP: assessRisk asks the LLM for a score WITH the learned landscape in the prompt;
+    /// the result is stored. This is "learning -> AI understanding".
+    function test_AssessRisk_StoresInformedScore() public {
+        // first learn something so the landscape isn't empty
+        learner.setSource("oracle-manipulation", HajarThreatLearner.SourceKind.Json, "u", "s", "", 0, 0);
+        platform.fulfillNumber(learner.learn(ORACLE), 70, 3);
+        assertEq(_level(ORACLE), 70);
+
+        uint256 id = learner.assessRisk("a 30% withdrawal while oracle threat is elevated");
+        assertGt(id, 0);
+        platform.fulfillNumber(id, 88, 3); // the AI's informed risk read
+        assertEq(learner.lastAssessment(), 88, "AI risk read stored");
+    }
+
+    /// The learned landscape string summarizes what Hajar knows (fed into the assess prompt).
+    function test_ThreatLandscape_SummarizesLearned() public {
+        learner.setSource("oracle-manipulation", HajarThreatLearner.SourceKind.Json, "u", "s", "", 0, 0);
+        platform.fulfillNumber(learner.learn(ORACLE), 65, 3);
+        string memory ls = learner.threatLandscape();
+        assertEq(ls, "oracle-manipulation 65");
+    }
+
+    function test_AssessRisk_Gated() public {
+        vm.prank(attacker);
+        vm.expectRevert(HajarThreatLearner.NotOwner.selector);
+        learner.assessRisk("x");
+    }
+
     function test_Classify_Gated() public {
         string[] memory allowed = new string[](1);
         allowed[0] = "reentrancy";

@@ -29,7 +29,7 @@ export const ADDRESSES = {
   guardian: "0xf47D21Afd23639870c5185462B2F418eF59d6F67",
   vault: "0xe349707D8BAfA05BC7dd2A2dE16638CBE4673043",
   monitor: "0xd6Fa24d9e388D12086D430e9F14ff99980E7789b", // Tier-3 reactivity subscriber bound to v4 (subscriptionId 5981959)
-  learner: "0x653F813F974FaE9950cC59DF4b3F49a5e8CB091e", // self-learning threat-intel engine (uses all 3 agents)
+  learner: "0x97BE2B347682D72D98a2965ADa4947EA1B2B8Acc", // self-learning engine v2 (rotating sources + AI feedback loop)
   platform: "0x037Bb9C718F3f7fe5eCBDB0b600D607b52706776",
 } as const;
 
@@ -147,10 +147,19 @@ export const learnerAbi = [
     ],
   },
   { type: "function", name: "highestThreat", stateMutability: "view", inputs: [], outputs: [{ type: "string" }, { type: "uint8" }] },
+  { type: "function", name: "threatLandscape", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "lastAssessment", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+  { type: "function", name: "lastAssessedAt", stateMutability: "view", inputs: [], outputs: [{ type: "uint64" }] },
+  { type: "function", name: "sourceCount", stateMutability: "view", inputs: [{ type: "bytes32" }], outputs: [{ type: "uint256" }] },
+  { type: "event", name: "AssessVerdict", inputs: [
+    { type: "uint256", name: "requestId", indexed: true },
+    { type: "uint8", name: "risk", indexed: false },
+    { type: "uint256", name: "validatorCount", indexed: false }] },
   { type: "event", name: "LearnRequested", inputs: [
     { type: "uint256", name: "requestId", indexed: true },
     { type: "bytes32", name: "category", indexed: true },
-    { type: "uint8", name: "kind", indexed: false }] },
+    { type: "uint8", name: "kind", indexed: false },
+    { type: "uint256", name: "sourceIndex", indexed: false }] },
   { type: "event", name: "Learned", inputs: [
     { type: "bytes32", name: "category", indexed: true },
     { type: "uint8", name: "level", indexed: false },

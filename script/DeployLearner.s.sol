@@ -24,35 +24,29 @@ contract DeployLearner is Script {
 
         HajarThreatLearner learner = new HajarThreatLearner(platform, JSON_AGENT, PARSE_AGENT, llm);
 
-        // Seed the taxonomy with real, scrape-able security sources — Hajar learns each category's
-        // current threat level from the live web (Parse Website agent reads the page + extracts a
-        // 0..100 score against the category-specific prompt).
+        // Seed ROTATING source pools — each category gets MULTIPLE feeds, so every scan rotates to a
+        // different source (broader, less single-source-dependent).
+        // market-stress: a reliable JSON index (Fear & Greed) — the proven-working path.
         learner.setSource(
-            "oracle-manipulation",
-            HajarThreatLearner.SourceKind.ParseWebsite,
-            "https://rekt.news",
-            "",
-            "Assess how active oracle/price manipulation exploits are right now based on this security feed",
-            1,
-            40
+            "market-stress", HajarThreatLearner.SourceKind.Json,
+            "https://api.alternative.me/fng/", "data.0.value", "", 0, 0
+        );
+        // oracle-manipulation: TWO scrape sources -> rotation on consecutive scans.
+        learner.setSource(
+            "oracle-manipulation", HajarThreatLearner.SourceKind.ParseWebsite, "https://rekt.news", "",
+            "Assess how active oracle/price manipulation exploits are right now based on this security feed", 1, 40
         );
         learner.setSource(
-            "reentrancy",
-            HajarThreatLearner.SourceKind.ParseWebsite,
-            "https://rekt.news",
-            "",
-            "Assess how active reentrancy exploits are right now based on this security feed",
-            1,
-            40
+            "oracle-manipulation", HajarThreatLearner.SourceKind.ParseWebsite, "https://www.immunefi.com/explore", "",
+            "Assess how active oracle/price manipulation exploits are right now based on this page", 1, 40
         );
         learner.setSource(
-            "flash-loan",
-            HajarThreatLearner.SourceKind.ParseWebsite,
-            "https://rekt.news",
-            "",
-            "Assess how active flash-loan attacks are right now based on this security feed",
-            1,
-            40
+            "reentrancy", HajarThreatLearner.SourceKind.ParseWebsite, "https://rekt.news", "",
+            "Assess how active reentrancy exploits are right now based on this security feed", 1, 40
+        );
+        learner.setSource(
+            "flash-loan", HajarThreatLearner.SourceKind.ParseWebsite, "https://rekt.news", "",
+            "Assess how active flash-loan attacks are right now based on this security feed", 1, 40
         );
         // access-control / governance start in the taxonomy (classify-only) until a feed is added.
         learner.addCategory("access-control");
