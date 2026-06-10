@@ -86,11 +86,22 @@ await amt.fill("0.03"); await wait(800);
 await click(/^deposit/i); await wait(11000);
 
 // 3) Try Drain 80% of TVL -> the guardian reverts it instantly (Tier-1). Console shows the block.
-await click(/try drain/i); await wait(11000);
-await page.mouse.wheel(0, 400); await wait(4000); // show the message / feed
+await click(/try drain/i); await wait(10000);
+await page.mouse.wheel(0, 350); await wait(3500); // show the "guardian blocked it" message
+await click(/reset breaker/i).catch(() => {}); await wait(3000);
 
-// 4) Reset (if anything latched) + settle.
-await click(/reset breaker/i).catch(() => {}); await wait(6000);
+// 4) Tour the deeper pages so the VO can explain each one.
+// Intelligence — the self-learned threat knowledge base (market-stress).
+await page.goto(SITE + "/intelligence", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+await wait(5000); await page.mouse.wheel(0, 380); await wait(4000); await page.mouse.wheel(0, -380); await wait(800);
+
+// AI Agents — the 3-agent catalog + the live consensus feed.
+await page.goto(SITE + "/agents", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+await wait(5000); await page.mouse.wheel(0, 460); await wait(4500); await page.mouse.wheel(0, 300); await wait(3500);
+
+// Identity — Hajar as a registered ERC-8004 agent.
+await page.goto(SITE + "/identity", { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
+await wait(5000); await page.mouse.wheel(0, 350); await wait(4000);
 
 await ctx.close();
 await browser.close();
